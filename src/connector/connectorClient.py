@@ -20,19 +20,13 @@
 from PySide import QtCore, QtNetwork
 from types import IntType, FloatType, ListType, DictType
 import json
-
+from address import address
 
 import proxylogger
 loggerInstance = proxylogger.instance
 import logging
 
-class fullAddress(object):
-    '''
-    Save the address and port of a client.
-    '''
-    def __init(self, address, port):
-        self.address    = QtNetwork.QHostAddress(address)
-        self.port       = int(port)
+
 
 class ClientModule(QtCore.QObject):
     def __init__(self, socket, parent=None):
@@ -81,11 +75,8 @@ class ClientModule(QtCore.QObject):
                 break
             
         if numProxy :
-            self.parent.parent.proxiesDestination[numProxy][self.ip] = fullAddress(ip, port)
-        
-            if not who in self.connectionList :
-                self.connectionList[who] = 
-        
+            self.parent.parent.proxiesDestination[numProxy][self.ip] = address.fullAddress(ip, port)
+
         
         
 
