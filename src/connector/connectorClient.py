@@ -21,9 +21,18 @@ from PySide import QtCore, QtNetwork
 from types import IntType, FloatType, ListType, DictType
 import json
 
+
 import proxylogger
 loggerInstance = proxylogger.instance
 import logging
+
+class fullAddress(object):
+    '''
+    Save the address and port of a client.
+    '''
+    def __init(self, address, port):
+        self.address    = QtNetwork.QHostAddress(address)
+        self.port       = int(port)
 
 class ClientModule(QtCore.QObject):
     def __init__(self, socket, parent=None):
@@ -43,25 +52,49 @@ class ClientModule(QtCore.QObject):
         self.ip = self.socket.peerAddress().toString()
         self.port = self.socket.peerPort()
         self.peerName = self.socket.peerName()
-    
-        self.requestid = {}
-
+          
+        self.proxies = []
+        
+        
         self.socket.readyRead.connect(self.readDatas)
         self.socket.disconnected.connect(self.disconnection)
         self.socket.error.connect(self.displayError)
         self.blockSize = 0        
 
+    def command_connect_to(self, message):
+        '''The client is asking for the permission to connect to someone'''
+        
+        who     = message["who"]
+        ip      = message["ip"]
+        port    = message["port"]
+        
+        # let's attributte a UDP socket for that client and destination
 
-    def sendJSON(self, data_dictionary, requestid = None):
+        
+        numProxy = None
+        
+        # first, check the first available port.
+        for i in range(11) :
+            if not i in self.proxies :
+                self.proxies.append(i)
+                numProxy = i
+                break
+            
+        if numProxy :
+            self.parent.parent.proxiesDestination[numProxy][self.ip] = fullAddress(ip, port)
+        
+            if not who in self.connectionList :
+                self.connectionList[who] = 
+        
+        
+        
+
+    def sendJSON(self, data_dictionary):
         '''
         Simply dumps a dictionary into a string and feeds it into the QTCPSocket
         '''
         data_string = ""
         try :           
-            if self.relay :   
-                data_dictionary["relay"] = self.relay
-            if requestid :
-                data_dictionary["requestid"] = requestid
             data_string = json.dumps(data_dictionary)
         except :
             return
@@ -74,28 +107,17 @@ class ClientModule(QtCore.QObject):
         '''
         message = json.loads(data_string)
         cmd = "command_" + message['command']
-        self.relay = message.get("relay", None)
         if hasattr(self, cmd):
-            check = False
-            login = stream.readQString()
-            session = stream.readQString()
-            if cmd == "command_ask_session" :  
-                getattr(self, cmd)(message)
-            elif cmd != "command_hello" and cmd != "command_create_account" :               
-                check = self.parent.listUsers.checkSession(login, session)
-            else :
-                check = True
-            if check :
                 getattr(self, cmd)(message)  
         else:
             self.log.error("command unknown : %s", cmd)
-            login = stream.readQString()
-            session = stream.readQString()       
+  
 
     def sendReply(self, action, *args, **kwargs) :
         if self in self.parent.recorders :
             if self.socket.bytesToWrite() > 16 * 1024 * 1024 :
                 self.log.error("too many to write already")
+                self.socket.abort()
                 return 
             reply = QtCore.QByteArray()
             stream = QtCore.QDataStream(reply, QtCore.QIODevice.WriteOnly)
@@ -118,24 +140,19 @@ class ClientModule(QtCore.QObject):
             stream.device().seek(0)         
             stream.writeUInt32(reply.size() - 4)
             if self.socket.write(reply) == -1 :
-                self.noSocket = True
+                self.socket.abort()
 
-    def disconnection(self):
-        if self.user != None :
-            self.parent.listUsers.removeUser(self.user)
-            self.sendToAll(self.user.userInfo())       
+    def disconnection(self):  
         self.done()
         
     def done(self):
-        if self in self.parent.recorders :
-            if self.pingTimer != None :
-                self.pingTimer.stop()
+        if self in self.parent.connected :
             if self.socket != None :
                 self.socket.readyRead.disconnect(self.readDatas)
                 self.socket.disconnected.disconnect(self.disconnection)
                 self.socket.error.disconnect(self.displayError)
                 self.socket.close()
-            self.parent.removeRecorder(self)
+            self.parent.removeConnected(self)
 
     def displayError(self, socketError):
         if socketError == QtNetwork.QAbstractSocket.RemoteHostClosedError:

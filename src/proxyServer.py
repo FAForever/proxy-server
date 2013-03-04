@@ -44,12 +44,16 @@ class start(QtCore.QObject):
     
 
         self.proxies = {}
+        self.proxiesDestination = {}
         
         for i in range(11) :
             self.proxies[i] = QtNetwork.QUdpSocket(self)
             self.proxies[i].bind(12000 + i)
             self.proxies[i].readyRead.connect(functools.partial(self.processPendingDatagrams, i))
+            self.proxiesDestination[i] = {}
             
+            
+        
         
         self.connector =  connector.ConnectorServer(self)
         if not self.connector.listen(QtNetwork.QHostAddress.Any, 12001):
@@ -66,7 +70,10 @@ class start(QtCore.QObject):
         while udpSocket.hasPendingDatagrams():
             self.log.debug("receiving UDP packet : " + str(udpSocket.pendingDatagramSize()))
             datagram, host, port = udpSocket.readDatagram(udpSocket.pendingDatagramSize())
-
+            
+            if host in self.proxiesDestination[i] :
+                destination = self.proxiesDestination[i][host]           
+                udpSocket.writeDatagram(datagram, destination.address, destination.port)
 
 
 

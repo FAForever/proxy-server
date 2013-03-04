@@ -50,9 +50,9 @@ class Server(QtNetwork.QTcpServer):
         reload(connectorClient) 
         self.connected.append(connectorClient.ClientModule(socketId, self))           
 
-    def removeRecorder(self, recorder):
-        if recorder in self.recorders:
-            self.recorders.remove(recorder)
-            recorder.deleteLater()
+    def removeConnected(self, lobby):
+        if lobby in self.connected:
+            self.connected.remove(lobby)
+            lobby.deleteLater()
 
 
