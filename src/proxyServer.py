@@ -72,8 +72,10 @@ class start(QtCore.QObject):
     def command_connect_to(self, message):
         '''The client is asking for the permission to connect to someone'''
         
+        print message
+        
         sourceip    = message["sourceip"]
-        sourceport  = message["sourceport"]
+        
         ip          = message["ip"]
         port        = message["port"]
         
