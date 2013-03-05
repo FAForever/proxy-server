@@ -27,7 +27,6 @@ import proxylogger
 loggerInstance = proxylogger.instance
 import logging
 from address import address
-import connector
 import json
 
 
@@ -49,11 +48,14 @@ class start(QtCore.QObject):
         self.proxiesByUser = {}
         self.pairConnections = {}
         
+        self.fixingPort = {}
+        
         for i in range(11) :
             self.proxies[i] = QtNetwork.QUdpSocket(self)
             if not self.proxies[i].bind(12001 + i) :
                 self.log.warn("Can't bind socket %i" % i)
             else :
+                self.log.info("binding socket %i" % i)
                 self.proxies[i].readyRead.connect(functools.partial(self.processPendingDatagrams, i))
                 self.proxiesDestination[i] = {}
             
@@ -65,46 +67,51 @@ class start(QtCore.QObject):
         if not self.connector.bind(12000) :
             self.log.warn("Can't bind connector socket")
         else :
+            self.log.info("binding connector socket")
             self.connector.readyRead.connect(self.processConnectorPendingDatagrams)
-#        if not self.connector.listen(QtNetwork.QHostAddress.Any, 12001):
-#            #self.logger.error ("Unable to start the server: %s." % self.errorString())
-#            #self.close()
-#            return        
-#        else:
-#            self.log.info ("starting the connector server on  %s:%i" % (self.connector.serverAddress().toString(),self.connector.serverPort()))  
 
+    def command_cleanup(self, message):
+        ''' We use this for cleaning up all infos about a connection (because it drop from game)'''
+        
+        self.log.debug(message)
+        sourceip    = message["sourceip"]
+   
+        if sourceip in self.fixingPort :
+            del self.fixingPort[sourceip]
+
+        for i in range(11) :
+            if sourceip in self.proxiesDestination[i] :
+                del self.proxiesDestination[i][sourceip]
+
+        self.log.debug("cleanup done for %s" % (sourceip))
 
     def command_connect_to(self, message):
         '''The client is asking for the permission to connect to someone'''
         
+        
         self.log.debug(message)
         
         sourceip    = message["sourceip"]
-        
+        proxyPort   = message["proxy"]
         ip          = message["ip"]
         port        = message["port"]
+
+        self.log.debug("binding %s for %s on proxy port number %i" % (ip, sourceip, proxyPort))
         
-        # let's attributte a UDP socket for that client and destination
-        numProxy = None
-        if not sourceip in self.proxiesByUser :
-            self.proxiesByUser[sourceip] = []
-        # first, check the first available port.
-            for i in range(11) :
-                if not i in self.proxiesByUser :
-                    self.proxiesByUser.append(i)
-                    numProxy = i
-                    break
-            
-        if numProxy :
-            self.proxiesDestination[numProxy][self.ip] = address.fullAddress(ip, port)
+        if not sourceip in self.fixingPort :
+            self.fixingPort[sourceip] = {}
+        
+        if not ip in self.fixingPort[sourceip] :
+            self.fixingPort[sourceip][ip] = port
+        
+        self.proxiesDestination[proxyPort][sourceip] = address.fullAddress(ip, port)
 
     def processConnectorPendingDatagrams(self):
         
         while self.connector.hasPendingDatagrams():
             self.log.debug("receiving UDP packet : " + str(self.connector.pendingDatagramSize()))
-            datagram, host, port = self.connector.readDatagram(self.connector.pendingDatagramSize())
-            
-            message = json.loads(datagram)
+            datagram, _, _ = self.connector.readDatagram(self.connector.pendingDatagramSize())
+            message = json.loads(str(datagram))
             cmd = "command_" + message['command']
             if hasattr(self, cmd):
                     getattr(self, cmd)(message)              
@@ -115,14 +122,28 @@ class start(QtCore.QObject):
         while udpSocket.hasPendingDatagrams():
             self.log.debug("receiving UDP packet : " + str(udpSocket.pendingDatagramSize()))
             datagram, host, port = udpSocket.readDatagram(udpSocket.pendingDatagramSize())
-            
-            if host in self.proxiesDestination[i] :
-                destination = self.proxiesDestination[i][host]           
-                udpSocket.writeDatagram(datagram, destination.address, destination.port)
-                
-                
+            hostString = host.toString()
+           
+            if hostString in self.proxiesDestination[i] :
 
-
+                
+                destination = self.proxiesDestination[i][hostString]
+                
+                destport = destination.port
+                if not destination.address.toString() in self.fixingPort :
+                    self.fixingPort[destination.address.toString()] = {}
+                    self.fixingPort[destination.address.toString()][hostString] = destination.port
+                    
+                else :
+                    if destport != self.fixingPort[destination.address.toString()][hostString] : 
+                        self.fixingPort[destination.address.toString()][hostString] = port
+                        destport = port
+                        self.log.debug("binding port %i for source %s and dest %s" %(port, hostString, destination.address.toString()))
+                                
+                
+                udpSocket.writeDatagram(datagram, destination.address, destport)
+                
+                self.log.debug("sending a packet to %s on proxy port number %i" % (destination.address.toString(), i))
 
 if __name__ == '__main__':
     import sys
