@@ -51,16 +51,21 @@ class start(QtCore.QObject):
         
         for i in range(11) :
             self.proxies[i] = QtNetwork.QUdpSocket(self)
-            self.proxies[i].bind(12001 + i)
-            self.proxies[i].readyRead.connect(functools.partial(self.processPendingDatagrams, i))
-            self.proxiesDestination[i] = {}
+            if not self.proxies[i].bind(12001 + i) :
+                self.log.warn("Can't bind socket %i" % i)
+            else :
+                self.proxies[i].readyRead.connect(functools.partial(self.processPendingDatagrams, i))
+                self.proxiesDestination[i] = {}
             
             
         
         
         self.connector =  QtNetwork.QUdpSocket(self)
-        self.connector.bind(12000)
-        self.connector.readyRead.connect(self.processConnectorPendingDatagrams)
+        
+        if not self.connector.bind(12000) :
+            self.log.warn("Can't bind connector socket")
+        else :
+            self.connector.readyRead.connect(self.processConnectorPendingDatagrams)
 #        if not self.connector.listen(QtNetwork.QHostAddress.Any, 12001):
 #            #self.logger.error ("Unable to start the server: %s." % self.errorString())
 #            #self.close()
@@ -72,7 +77,7 @@ class start(QtCore.QObject):
     def command_connect_to(self, message):
         '''The client is asking for the permission to connect to someone'''
         
-        print message
+        self.log.debug(message)
         
         sourceip    = message["sourceip"]
         
