@@ -130,7 +130,7 @@ class start(QtCore.QObject):
                 destination = self.proxiesDestination[i][hostString]
                 
                 destport = destination.port
-                if not destination.address.toString() in self.fixingPort :
+                if not hostString in self.fixingPort :
                     self.fixingPort[hostString] = {}
                     self.fixingPort[hostString][destination.address.toString()] = destination.port
                     
