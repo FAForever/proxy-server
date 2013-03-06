@@ -97,13 +97,7 @@ class start(QtCore.QObject):
         port        = message["port"]
 
         self.log.debug("binding %s for %s on proxy port number %i" % (ip, sourceip, proxyPort))
-        
-        if not sourceip in self.fixingPort :
-            self.fixingPort[sourceip] = {}
-        
-        if not ip in self.fixingPort[sourceip] :
-            self.fixingPort[sourceip][ip] = port
-        
+
         self.proxiesDestination[proxyPort][sourceip] = address.fullAddress(ip, port)
 
     def processConnectorPendingDatagrams(self):
