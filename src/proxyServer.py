@@ -137,13 +137,14 @@ class start(QtCore.QObject):
                 else :
                     if destport != self.fixingPort[destination.address.toString()][hostString] : 
                         self.fixingPort[destination.address.toString()][hostString] = port
+                        self.proxiesDestination[i][hostString].port = port
                         destport = port
                         self.log.debug("binding port %i for source %s and dest %s" %(port, hostString, destination.address.toString()))
                                 
                 
                 udpSocket.writeDatagram(datagram, destination.address, destport)
                 
-                self.log.debug("sending a packet to %s on proxy port number %i" % (destination.address.toString(), i))
+                self.log.debug("sending a packet to %s on proxy port number %i (%i)" % (destination.address.toString(), i, destport))
 
 if __name__ == '__main__':
     import sys
