@@ -114,7 +114,7 @@ class start(QtCore.QObject):
 
         udpSocket = self.proxies[i]
         while udpSocket.hasPendingDatagrams():
-            self.log.debug("receiving UDP packet : " + str(udpSocket.pendingDatagramSize()))
+            #self.log.debug("receiving UDP packet : " + str(udpSocket.pendingDatagramSize()))
             datagram, host, port = udpSocket.readDatagram(udpSocket.pendingDatagramSize())
             hostString = host.toString()
            
