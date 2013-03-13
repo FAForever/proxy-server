@@ -134,12 +134,14 @@ class start(QtCore.QObject):
                 
                 if not destination.address.toString() in self.fixingPort[i] or "NAT_SOLVING" in datagram:
                     
-                    self.fixingPort[i][destination.address.toString()] = port
+                    self.log.debug(datagram)
+                    
                     self.proxiesDestination[i][hostString].port = port
                     destport = port
                      
                     
                     if "NAT_SOLVING" in datagram :
+                        self.fixingPort[i][destination.address.toString()] = port
                         udpSocket.writeDatagram("\x08PROXY_SOLVING_PACKET_RECEIVED %i" % port, host, port)
                         self.log.info("binding port %i for source %s and dest %s and sending NAT solving " %(port, hostString, destination.address.toString()))
                     else :
