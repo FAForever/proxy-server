@@ -156,7 +156,7 @@ class start(QtCore.QObject):
                         self.forwardPacket[i][hostString] = self.forwardPacket[i][hostString] + 1
                         
                         if self.forwardPacket[i][hostString] < 5 :
-                            self.log.debug("Sending a packet to %s on proxy port number %i (%i)" % (destination.address.toString(), i, destport))
+                            self.log.debug("Sending a packet from %s to %s on proxy port number %i (%i)" % (hostString, destination.address.toString(), i, destport))
                         
                     
                     if udpSocket.writeDatagram(datagram, destination.address, destport) == -1 :
