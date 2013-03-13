@@ -50,6 +50,8 @@ class start(QtCore.QObject):
         
         self.fixingPort = {}
         
+        self.forwardPacket = {}
+        
         for i in range(11) :
             self.proxies[i] = QtNetwork.QUdpSocket(self)
             if not self.proxies[i].bind(12001 + i) :
@@ -58,6 +60,8 @@ class start(QtCore.QObject):
                 self.log.info("binding socket %i" % i)
                 self.proxies[i].readyRead.connect(functools.partial(self.processPendingDatagrams, i))
                 self.proxiesDestination[i] = {}
+                self.fixingPort[i] = {}
+                self.forwardPacket[i] = {}
             
             
         
@@ -76,12 +80,14 @@ class start(QtCore.QObject):
         self.log.debug(message)
         sourceip    = message["sourceip"]
    
-        if sourceip in self.fixingPort :
-            del self.fixingPort[sourceip]
 
         for i in range(11) :
             if sourceip in self.proxiesDestination[i] :
                 del self.proxiesDestination[i][sourceip]
+
+            if sourceip in self.fixingPort[i] :
+                del self.fixingPort[i][sourceip]
+
 
         self.log.debug("cleanup done for %s" % (sourceip))
 
@@ -126,9 +132,9 @@ class start(QtCore.QObject):
                 
                 destport = destination.port
                 
-                if not destination.address.toString() in self.fixingPort or "NAT_SOLVING" in datagram:
+                if not destination.address.toString() in self.fixingPort[i] or "NAT_SOLVING" in datagram:
                     
-                    self.fixingPort[destination.address.toString()] = port
+                    self.fixingPort[i][destination.address.toString()] = port
                     self.proxiesDestination[i][hostString].port = port
                     destport = port
                      
@@ -141,6 +147,16 @@ class start(QtCore.QObject):
                         self.log.info("binding port %i for source %s and dest %s and sending NAT" %(port, hostString, destination.address.toString()))
                 
                 if not "NAT" in datagram :
+                    
+                    if not hostString in self.forwardPacket[i] :
+                        self.forwardPacket[i][hostString] = 1
+                    else :
+                        self.forwardPacket[i][hostString] = self.forwardPacket[i][hostString] + 1
+                        
+                        if self.forwardPacket[i][hostString] < 5 :
+                            self.log.debug("Sending a packet to %s on proxy port number %i (%i)" % (destination.address.toString(), i, destport))
+                        
+                    
                     if udpSocket.writeDatagram(datagram, destination.address, destport) == -1 :
                         self.log.warn("FAILED sending a packet to %s on proxy port number %i (%i)" % (destination.address.toString(), i, destport))
                 else :
