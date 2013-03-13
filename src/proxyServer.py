@@ -148,7 +148,7 @@ class start(QtCore.QObject):
                         udpSocket.writeDatagram("\x08PROXY_PACKET_RECEIVED %i" % port, host, port)
                         self.log.info("binding port %i for source %s and dest %s and sending NAT" %(port, hostString, destination.address.toString()))
                 
-                if not "NAT" in datagram :
+                if not "NAT" in str(datagram) :
                     
                     if not hostString in self.forwardPacket[i] :
                         self.forwardPacket[i][hostString] = 1
