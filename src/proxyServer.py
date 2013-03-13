@@ -140,9 +140,11 @@ class start(QtCore.QObject):
                         udpSocket.writeDatagram("\x08PROXY_PACKET_RECEIVED %i" % port, host, port)
                         self.log.info("binding port %i for source %s and dest %s and sending NAT" %(port, hostString, destination.address.toString()))
                 
-                if udpSocket.writeDatagram(datagram, destination.address, destport) == -1 :
-                    self.log.warn("FAILED sending a packet to %s on proxy port number %i (%i)" % (destination.address.toString(), i, destport))
-
+                if not "NAT" in datagram :
+                    if udpSocket.writeDatagram(datagram, destination.address, destport) == -1 :
+                        self.log.warn("FAILED sending a packet to %s on proxy port number %i (%i)" % (destination.address.toString(), i, destport))
+                else :
+                    self.log.debug("ignoring NAT packet.")
 
 
 if __name__ == '__main__':
