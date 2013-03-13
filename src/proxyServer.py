@@ -121,20 +121,17 @@ class start(QtCore.QObject):
             if hostString in self.proxiesDestination[i] :
 
                 
+                
                 destination = self.proxiesDestination[i][hostString]
                 
                 destport = destination.port
                 
-                if not destination.address.toString() in self.fixingPort :
+                if not destination.address.toString() in self.fixingPort or "NAT_SOLVING" in datagram:
+                    
                     self.fixingPort[destination.address.toString()] = port
                     self.proxiesDestination[i][hostString].port = port
                     destport = port
                     self.log.info("binding port %i for source %s and dest %s and sending packet received" %(port, hostString, destination.address.toString()))
-                    udpSocket.writeDatagram("\x08PROXY_PACKET_RECEIVED %i" % port, host, port)
-                    udpSocket.writeDatagram("\x08PROXY_PACKET_RECEIVED %i" % port, host, port)
-                    udpSocket.writeDatagram("\x08PROXY_PACKET_RECEIVED %i" % port, host, port)
-                    udpSocket.writeDatagram("\x08PROXY_PACKET_RECEIVED %i" % port, host, port)
-                    udpSocket.writeDatagram("\x08PROXY_PACKET_RECEIVED %i" % port, host, port)
                     udpSocket.writeDatagram("\x08PROXY_PACKET_RECEIVED %i" % port, host, port)
                 
                 if udpSocket.writeDatagram(datagram, destination.address, destport) == -1 :
