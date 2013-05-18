@@ -30,40 +30,38 @@ void ProxyConnection::readData()
     QDataStream ins(socket);
     ins.setVersion(QDataStream::Qt_4_2);
 
-    while (ins.atEnd() == false)
+
+    qDebug("looping over data");
+    if (blocksize == 0)
     {
-        qDebug("looping over data");
-        if (blocksize == 0)
+         qDebug("No blocksize.");
+        if (socket->bytesAvailable() < (int)sizeof(quint32))
         {
-             qDebug("No blocksize.");
-            if (socket->bytesAvailable() < (int)sizeof(quint32))
-            {
-                return;
-                qDebug("Not enough data.");
-            }
-
-            ins >> (quint32&) blocksize;
-            qDebug("blocksize : %i", blocksize);
-        }
-        if (socket->bytesAvailable() < blocksize)
-        {
-            qDebug("Not enough data for this blocksize.");
             return;
+            qDebug("Not enough data.");
         }
 
-        quint16 port;
-        QString address;
-        QVariant packet;
-
-        ins >> port;
-        ins >> address;
-        ins >> packet;
-
-        qDebug("send packet to..");
-        emit sendPacket(address, port, packet);
-        blocksize = 0;
-
+        ins >> (quint32&) blocksize;
+        qDebug("blocksize : %i", blocksize);
     }
+    if (socket->bytesAvailable() < blocksize)
+    {
+        qDebug("Not enough data for this blocksize.");
+        return;
+    }
+
+    quint16 port;
+    QString address;
+    QVariant packet;
+
+    ins >> port;
+    ins >> address;
+    ins >> packet;
+
+    qDebug("send packet to..");
+    emit sendPacket(address, port, packet);
+    blocksize = 0;
+
 
 }
 
