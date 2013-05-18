@@ -12,7 +12,7 @@ class ProxyConnection : public QTcpSocket
 {
     Q_OBJECT
 public:
-    explicit ProxyConnection(QObject *parent = 0);
+    explicit ProxyConnection(int socketDescriptor, QObject *parent = 0);
     void send(quint16 port, QVariant packet);
 
 private:

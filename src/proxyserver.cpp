@@ -13,8 +13,8 @@ Server::Server(QObject* parent): QTcpServer(parent)
 void Server::incomingConnection( int socketDescriptor )
 {
     qDebug("incoming connection");
-    ProxyConnection *connection    = new ProxyConnection( this );
-    connection->setSocketDescriptor(socketDescriptor);
+    ProxyConnection *connection    = new ProxyConnection(socketDescriptor, this );
+
     emit newConnection(connection);
 }
 

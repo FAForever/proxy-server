@@ -1,12 +1,15 @@
 
 #include "proxyconnection.h"
 
-ProxyConnection::ProxyConnection(QObject *parent) :
+ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
     QTcpSocket(parent)
 {
 
     socket = new QTcpSocket(this);
     blocksize = 0;
+
+    if (!socket->setSocketDescriptor(socketDescriptor))
+        qDebug("socket failed");
 
     socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
 
