@@ -5,22 +5,21 @@ ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
     QTcpSocket(parent)
 {
 
-    socket = new QTcpSocket(this);
     blocksize = 0;
 
-    if (socket->setSocketDescriptor(socketDescriptor))
+    if (this->setSocketDescriptor(socketDescriptor))
         qDebug("socket set");
     else
         qDebug("socket failed");
 
-    socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
+    this->setSocketOption(QAbstractSocket::LowDelayOption, 1);
 
-    peerAddress = socket->peerAddress().toString();
+    peerAddress = this->peerAddress().toString();
 
 
 
-    connect(socket, SIGNAL(readyRead()),this,SLOT(readData()));
-    connect(socket, SIGNAL(disconnected()), this, SLOT(disconnection()));
+    connect(this, SIGNAL(readyRead()),this,SLOT(readData()));
+    connect(this, SIGNAL(disconnected()), this, SLOT(disconnection()));
 
     connect(this, SIGNAL(sendPacket(QString,quint16,QVariant)), this->parent(), SLOT(sendPacket(QString,quint16,QVariant)));
 
@@ -34,43 +33,44 @@ ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
 void ProxyConnection::readData()
 {
     qDebug("reading data");
-    QDataStream ins(socket);
+    QDataStream ins(this);
     ins.setVersion(QDataStream::Qt_4_2);
 
-
-    qDebug("looping over data");
-    if (blocksize == 0)
+    while (ins.atEnd() == false)
     {
-         qDebug("No blocksize.");
-         qDebug("bytes available : %i", socket->bytesAvailable());
-        if (socket->bytesAvailable() < (int)sizeof(quint32))
+        qDebug("looping over data");
+        if (blocksize == 0)
         {
-            qDebug("Not enough data.");
-            return;
+             qDebug("No blocksize.");
+             qDebug("bytes available : %i", this->bytesAvailable());
+            if (this->bytesAvailable() < (int)sizeof(quint32))
+            {
+                qDebug("Not enough data.");
+                return;
 
+            }
+
+            ins >> (quint32&) blocksize;
+            qDebug("blocksize : %i", blocksize);
+        }
+        if (this->bytesAvailable() < blocksize)
+        {
+            qDebug("Not enough data for this blocksize.");
+            return;
         }
 
-        ins >> (quint32&) blocksize;
-        qDebug("blocksize : %i", blocksize);
+        quint16 port;
+        QString address;
+        QVariant packet;
+
+        ins >> port;
+        ins >> address;
+        ins >> packet;
+
+        qDebug("send packet to..");
+        emit sendPacket(address, port, packet);
+        blocksize = 0;
     }
-    if (socket->bytesAvailable() < blocksize)
-    {
-        qDebug("Not enough data for this blocksize.");
-        return;
-    }
-
-    quint16 port;
-    QString address;
-    QVariant packet;
-
-    ins >> port;
-    ins >> address;
-    ins >> packet;
-
-    qDebug("send packet to..");
-    emit sendPacket(address, port, packet);
-    blocksize = 0;
-
 
 }
 
@@ -88,7 +88,7 @@ void ProxyConnection::send(quint16 port, QVariant packet)
     stream.device()->seek(0);
     stream <<(quint32)(reply.size() - sizeof(quint32));
 
-    socket->write(reply);
+    this->write(reply);
 }
 
 void ProxyConnection::disconnection()

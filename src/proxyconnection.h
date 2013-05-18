@@ -16,7 +16,6 @@ public:
     void send(quint16 port, QVariant packet);
 
 private:
-    QTcpSocket *socket;
     quint32 blocksize;
     QString peerAddress;
 
