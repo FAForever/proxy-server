@@ -17,10 +17,10 @@ ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
 
     peerAddress = socket->peerAddress().toString();
 
-    qDebug("peer address : %s", peerAddress);
 
-    connect(this, SIGNAL(readyRead()),this,SLOT(readData()));
-    connect(this, SIGNAL(disconnected()), this, SLOT(disconnection()));
+
+    connect(socket, SIGNAL(readyRead()),this,SLOT(readData()));
+    connect(socket, SIGNAL(disconnected()), this, SLOT(disconnection()));
 
     connect(this, SIGNAL(sendPacket(QString,quint16,QVariant)), this->parent(), SLOT(sendPacket(QString,quint16,QVariant)));
 
