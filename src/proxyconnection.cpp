@@ -27,19 +27,17 @@ ProxyConnection::ProxyConnection(QObject *parent) :
 void ProxyConnection::readData()
 {
     qDebug("reading data");
-    if (socket->bytesAvailable() == 0 )
-        return;
-
     QDataStream ins(socket);
     ins.setVersion(QDataStream::Qt_4_2);
 
     while (ins.atEnd() == false)
     {
         if (blocksize == 0)
+        {
             if (socket->bytesAvailable() < (int)sizeof(blocksize))
                 return;
             ins >> blocksize;
-
+        }
         if (socket->bytesAvailable() < blocksize)
             return;
 
