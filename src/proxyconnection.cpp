@@ -32,17 +32,24 @@ void ProxyConnection::readData()
 
     while (ins.atEnd() == false)
     {
+        qDebug("looping over data");
         if (blocksize == 0)
         {
+             qDebug("No blocksize.");
             if (socket->bytesAvailable() < (int)sizeof(quint32))
             {
                 return;
                 qDebug("Not enough data.");
             }
+
             ins >> (quint32&) blocksize;
+            qDebug(blocksize);
         }
         if (socket->bytesAvailable() < blocksize)
+        {
+            qDebug("Not enough data for this blocksize.");
             return;
+        }
 
         quint16 port;
         QString address;
