@@ -21,7 +21,7 @@ void Server::incomingConnection( int socketDescriptor )
 
 void Server::sendPacket(QString address, quint16 port, QVariant packet)
 {
-    qDebug("send to peer");
+
     QMap<QString, ProxyConnection*>::const_iterator socket = peers.find(address);
     while (socket != peers.end() && socket.key() == address)
     {
