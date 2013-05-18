@@ -35,10 +35,12 @@ void ProxyConnection::readData()
     if (blocksize == 0)
     {
          qDebug("No blocksize.");
+         qDebug("bytes available : %i", socket->bytesAvailable());
         if (socket->bytesAvailable() < (int)sizeof(quint32))
         {
-            return;
             qDebug("Not enough data.");
+            return;
+
         }
 
         ins >> (quint32&) blocksize;
