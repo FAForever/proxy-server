@@ -60,6 +60,7 @@ void ProxyConnection::readData()
 
 void ProxyConnection::send(quint16 port, QVariant packet)
 {
+    qDebug("send to peer on port %i", port);
     QByteArray reply;
     QDataStream stream(&reply, QIODevice::WriteOnly);
     stream.setVersion(QDataStream::Qt_4_2);
