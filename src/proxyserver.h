@@ -16,10 +16,6 @@ public:
     Server(QObject * parent = 0);
 
 private:
-    void addPeer(QString address, ProxyConnection* socket);
-    void removePeer(QString address);
-
-private:
     QMap<QString, ProxyConnection*> peers;
 
 
@@ -28,6 +24,8 @@ signals:
 
 public slots:
     void sendPacket(QString address, quint16 port, QVariant packet);
+    void addPeer(QString address, ProxyConnection* socket);
+    void removePeer(QString address);
 
 protected:
     void incomingConnection(int socketDescriptor);
