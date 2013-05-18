@@ -26,6 +26,7 @@ ProxyConnection::ProxyConnection(QObject *parent) :
 
 void ProxyConnection::readData()
 {
+    qDebug("reading data");
     if (socket->bytesAvailable() == 0 )
         return;
 
@@ -50,7 +51,7 @@ void ProxyConnection::readData()
         ins >> address;
         ins >> packet;
 
-
+        qDebug("send packet to..");
         emit sendPacket(address, port, packet);
         blocksize = 0;
 
