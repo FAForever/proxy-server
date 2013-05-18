@@ -14,7 +14,7 @@ ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
 
     this->setSocketOption(QAbstractSocket::LowDelayOption, 1);
 
-    peerAddress = this->peerAddress().toString();
+    peerAddress = QString(this->peerAddress().toString());
 
 
 
@@ -42,7 +42,6 @@ void ProxyConnection::readData()
         if (blocksize == 0)
         {
              qDebug("No blocksize.");
-             qDebug("bytes available : %i", this->bytesAvailable());
             if (this->bytesAvailable() < (int)sizeof(quint32))
             {
                 qDebug("Not enough data.");
