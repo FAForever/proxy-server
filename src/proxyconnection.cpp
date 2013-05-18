@@ -43,7 +43,7 @@ void ProxyConnection::readData()
             }
 
             ins >> (quint32&) blocksize;
-            qDebug(blocksize);
+            qDebug("blocksize : %i", blocksize);
         }
         if (socket->bytesAvailable() < blocksize)
         {
