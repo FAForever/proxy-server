@@ -8,12 +8,16 @@ ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
     socket = new QTcpSocket(this);
     blocksize = 0;
 
-    if (!socket->setSocketDescriptor(socketDescriptor))
+    if (socket->setSocketDescriptor(socketDescriptor))
+        qDebug("socket set");
+    else
         qDebug("socket failed");
 
     socket->setSocketOption(QAbstractSocket::LowDelayOption, 1);
 
     peerAddress = socket->peerAddress().toString();
+
+    qDebug("peer address : %s", peerAddress);
 
     connect(this, SIGNAL(readyRead()),this,SLOT(readData()));
     connect(this, SIGNAL(disconnected()), this, SLOT(disconnection()));
