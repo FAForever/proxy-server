@@ -14,7 +14,7 @@ ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
 
     this->setSocketOption(QAbstractSocket::LowDelayOption, 1);
 
-    peerAddress = QString(this->peerAddress().toString());
+    address = QString(this->peerAddress().toString());
 
 
 
@@ -26,7 +26,7 @@ ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
     connect(this, SIGNAL(addPeer(QString,ProxyConnection*)), this->parent(), SLOT(addPeer(QString,ProxyConnection*)));
     connect(this, SIGNAL(removePeer(QString)), this->parent(), SLOT(removePeer(QString)));
 
-    emit addPeer(peerAddress, this);
+    emit addPeer(address, this);
 
 }
 
@@ -92,6 +92,6 @@ void ProxyConnection::send(quint16 port, QVariant packet)
 
 void ProxyConnection::disconnection()
 {
-    emit removePeer(peerAddress);
+    emit removePeer(address);
     deleteLater();
 }

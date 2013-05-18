@@ -17,7 +17,7 @@ public:
 
 private:
     quint32 blocksize;
-    QString peerAddress;
+    QString address;
 
 signals:
     void sendPacket(QString address, quint16 port, QVariant packet);
