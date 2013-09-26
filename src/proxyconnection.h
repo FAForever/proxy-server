@@ -17,12 +17,13 @@ public:
 
 private:
     quint32 blocksize;
-    QString address;
+    quint16 uidUser;
+    bool uidSet;
 
 signals:
-    void sendPacket(QString address, quint16 port, QVariant packet);
-    void addPeer(QString address, ProxyConnection *socket);
-    void removePeer(QString address);
+    void sendPacket(uint uid, quint16 port, QVariant packet);
+    void addPeer(uint uid, ProxyConnection *socket);
+    void removePeer(uint uid);
     
 public slots:
     void readData();

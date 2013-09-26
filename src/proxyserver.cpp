@@ -4,7 +4,7 @@
 Server::Server(QObject* parent): QTcpServer(parent)
 {
 
-    if (!listen(QHostAddress::Any, 9123))
+    if (!listen(QHostAddress::Any, 9124))
         qDebug("Unable to start the server");
 
 }
@@ -12,34 +12,25 @@ Server::Server(QObject* parent): QTcpServer(parent)
 
 void Server::incomingConnection( int socketDescriptor )
 {
-    qDebug("incoming connection");
     ProxyConnection *connection    = new ProxyConnection(socketDescriptor, this );
 
     emit newConnection(connection);
 }
 
 
-void Server::sendPacket(QString address, quint16 port, QVariant packet)
+void Server::sendPacket(quint16 uid, quint16 port, QVariant packet)
 {
-
-    QMap<QString, ProxyConnection*>::const_iterator socket = peers.find(address);
-    while (socket != peers.end() && socket.key() == address)
-    {
-        socket.value()->send(port, packet);
-        ++socket;
-    }
-
+    if(peers.contains(uid))
+        peers.value(uid)->send(port, packet);
 }
 
-void Server::addPeer(QString address, ProxyConnection *socket)
+void Server::addPeer(quint16 uid, ProxyConnection *socket)
 {
-    qDebug("adding peer");
-    peers.insert(address, socket);
+    peers.insert(uid, socket);
 }
 
-void Server::removePeer(QString address)
+void Server::removePeer(quint16 uid)
 {
-    qDebug("remove peer");
-    peers.remove(address);
+    peers.remove(uid);
 
 }

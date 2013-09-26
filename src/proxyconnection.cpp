@@ -14,19 +14,18 @@ ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
 
     this->setSocketOption(QAbstractSocket::LowDelayOption, 1);
 
-    address = QString(this->peerAddress().toString());
-
-
+    //address = QString(this->peerAddress().toString());
 
     connect(this, SIGNAL(readyRead()),this,SLOT(readData()));
     connect(this, SIGNAL(disconnected()), this, SLOT(disconnection()));
 
-    connect(this, SIGNAL(sendPacket(QString,quint16,QVariant)), this->parent(), SLOT(sendPacket(QString,quint16,QVariant)));
+    connect(this, SIGNAL(sendPacket(QString,quint16,QVariant)), this->parent(), SLOT(sendPacket(uint,quint16,QVariant)));
 
-    connect(this, SIGNAL(addPeer(QString,ProxyConnection*)), this->parent(), SLOT(addPeer(QString,ProxyConnection*)));
-    connect(this, SIGNAL(removePeer(QString)), this->parent(), SLOT(removePeer(QString)));
+    connect(this, SIGNAL(addPeer(uint,ProxyConnection*)), this->parent(), SLOT(addPeer(uint,ProxyConnection*)));
+    connect(this, SIGNAL(removePeer(uint)), this->parent(), SLOT(removePeer(uint)));
 
-    emit addPeer(address, this);
+    //emit addPeer(address, this);
+    uidSet = false;
 
 }
 
@@ -49,17 +48,26 @@ void ProxyConnection::readData()
         if (this->bytesAvailable() < blocksize)
             return;
 
+        if (uidSet)
+        {
+            quint16 port;
+            quint16 uid;
+            QVariant packet;
 
-        quint16 port;
-        QString address;
-        QVariant packet;
+            ins >> port;
+            ins >> uid;
+            ins >> packet;
+            emit sendPacket(uid, port, packet);
+        }
+        else
+        {
+            quint16 uid;
+            ins >> uid;
+            uidUser = uid;
+            emit addPeer(uid, this);
+            uidSet = true;
 
-        ins >> port;
-        ins >> address;
-        ins >> packet;
-
-
-        emit sendPacket(address, port, packet);
+        }
         blocksize = 0;
     }
 
@@ -79,11 +87,12 @@ void ProxyConnection::send(quint16 port, QVariant packet)
     stream.device()->seek(0);
     stream <<(quint32)(reply.size() - sizeof(quint32));
 
-    this->write(reply);
+    if (this->write(reply) == -1)
+        this->abort();
 }
 
 void ProxyConnection::disconnection()
 {
-    emit removePeer(address);
+    emit removePeer(uidUser);
     deleteLater();
 }
