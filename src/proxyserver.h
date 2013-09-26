@@ -16,7 +16,7 @@ public:
     Server(QObject * parent = 0);
 
 private:
-    QHash<uint, ProxyConnection*> peers;
+    QHash<quint16, ProxyConnection*> peers;
 
 
 signals:

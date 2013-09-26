@@ -21,9 +21,9 @@ private:
     bool uidSet;
 
 signals:
-    void sendPacket(uint uid, quint16 port, QVariant packet);
-    void addPeer(uint uid, ProxyConnection *socket);
-    void removePeer(uint uid);
+    void sendPacket(quint16 uid, quint16 port, QVariant packet);
+    void addPeer(quint16 uid, ProxyConnection *socket);
+    void removePeer(quint16 uid);
     
 public slots:
     void readData();

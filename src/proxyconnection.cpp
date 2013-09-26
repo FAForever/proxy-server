@@ -19,10 +19,10 @@ ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
     connect(this, SIGNAL(readyRead()),this,SLOT(readData()));
     connect(this, SIGNAL(disconnected()), this, SLOT(disconnection()));
 
-    connect(this, SIGNAL(sendPacket(QString,quint16,QVariant)), this->parent(), SLOT(sendPacket(uint,quint16,QVariant)));
+    connect(this, SIGNAL(sendPacket(quint16,quint16,QVariant)), this->parent(), SLOT(sendPacket(quint16,quint16,QVariant)));
 
-    connect(this, SIGNAL(addPeer(uint,ProxyConnection*)), this->parent(), SLOT(addPeer(uint,ProxyConnection*)));
-    connect(this, SIGNAL(removePeer(uint)), this->parent(), SLOT(removePeer(uint)));
+    connect(this, SIGNAL(addPeer(quint16,ProxyConnection*)), this->parent(), SLOT(addPeer(quint16,ProxyConnection*)));
+    connect(this, SIGNAL(removePeer(quint16)), this->parent(), SLOT(removePeer(quint16)));
 
     //emit addPeer(address, this);
     uidSet = false;
