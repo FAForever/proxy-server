@@ -1,12 +1,16 @@
 #include "proxyserver.h"
 #include "proxyconnection.h"
 
+
 Server::Server(QObject* parent): QTcpServer(parent)
 {
-
     if (!listen(QHostAddress::Any, 9124))
         qDebug("Unable to start the server");
+    else
+        qDebug() << "Proxy Server Listening to" << this->serverAddress().toString() << "on port" << this->serverPort();
 
+    enslaver = false;
+    blocksize = 0;
 }
 
 
@@ -33,4 +37,79 @@ void Server::removePeer(quint16 uid)
 {
     peers.remove(uid);
 
+}
+
+bool Server::setSlave(QString masterAddress)
+{
+    qDebug() << "master is :" << masterAddress;
+    master = QHostAddress(masterAddress);
+
+    masterConnection->connectToHost(master, 9125);
+    while (masterConnection->state() != QAbstractSocket::ConnectedState)
+    {
+         QCoreApplication::processEvents();
+        qDebug("connecting to server ...");
+    }
+
+    connect(masterConnection, SIGNAL(readyRead()),this,SLOT(readDataFromMaster()));
+    connect(masterConnection, SIGNAL(disconnected()),this,SLOT(disconnectedFromMaster()));
+    connect(masterConnection, SIGNAL(error()),this,SLOT(errorFromMaster()));
+
+    return !master.isNull();
+
+}
+
+bool Server::isSlave()
+{
+    return !master.isNull();
+}
+
+bool Server::setMaster()
+{
+    masterServer = new masterserver(this);
+    enslaver = true;
+    return enslaver;
+}
+
+void Server::readDataFromMaster()
+{
+    QDataStream ins(masterConnection);
+    ins.setVersion(QDataStream::Qt_4_2);
+
+    while (ins.atEnd() == false)
+    {
+        if (blocksize == 0)
+        {
+
+            if (masterConnection->bytesAvailable() < (int)sizeof(quint32))
+                return;
+
+
+            ins >> (quint32&) blocksize;
+
+        }
+        if (masterConnection->bytesAvailable() < blocksize)
+            return;
+
+        // read data here
+
+
+        blocksize = 0;
+    }
+}
+
+void Server::disconnectedFromMaster()
+{
+    // we should reconnect
+    masterConnection->connectToHost(master, 9125);
+    while (masterConnection->state() != QAbstractSocket::ConnectedState)
+    {
+         QCoreApplication::processEvents();
+        qDebug("Re-connecting to server ...");
+    }
+}
+
+void Server::errorFromMaster(QAbstractSocket::SocketError error)
+{
+    qDebug() << error;
 }

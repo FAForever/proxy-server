@@ -18,8 +18,10 @@ TEMPLATE = app
 
 SOURCES += main.cpp \
     proxyserver.cpp \
-    proxyconnection.cpp
+    proxyconnection.cpp \
+    masterserver.cpp
 
 HEADERS += \
     proxyserver.h \
-    proxyconnection.h
+    proxyconnection.h \
+    masterserver.h
