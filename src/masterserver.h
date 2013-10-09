@@ -11,12 +11,19 @@ class masterserver : public QTcpServer
 public:
     explicit masterserver(QObject *parent = 0);
 
+private:
+    QHash<QHostAddress, MasterConnection*> slaves;
+
 signals:
     void newConnection(MasterConnection *connection);
 
 protected:
     void incomingConnection(int socketDescriptor);
 
+public slots:
+
+    void addSlave(MasterConnection* socket);
+    void removeSlave(QHostAddress address);
 
 };
 

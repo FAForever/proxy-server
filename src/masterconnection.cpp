@@ -18,10 +18,10 @@ MasterConnection::MasterConnection(int socketDescriptor, QObject *parent) :
 
     //connect(this, SIGNAL(sendPacket(quint16,quint16,QVariant)), this->parent(), SLOT(sendPacket(quint16,quint16,QVariant)));
 
-    //connect(this, SIGNAL(addPeer(quint16,ProxyConnection*)), this->parent(), SLOT(addPeer(quint16,ProxyConnection*)));
-    //connect(this, SIGNAL(removePeer(quint16)), this->parent(), SLOT(removePeer(quint16)));
+    connect(this, SIGNAL(addSlave(MasterConnection*)), this->parent(), SLOT(addSlave(MasterConnection*)));
+    connect(this, SIGNAL(removeSlave(QHostAddress)), this->parent(), SLOT(removeSlave(QHostAddress)));
 
-    //emit addPeer(address, this);
+    emit addSlave(this);
 
 }
 
@@ -71,6 +71,6 @@ void MasterConnection::send(quint16 port, QVariant packet)
 
 void MasterConnection::disconnection()
 {
-    //emit removePeer(uidUser);
+    emit removeSlave(this->peerAddress());
     deleteLater();
 }

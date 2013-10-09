@@ -15,7 +15,10 @@ public:
 private:
     quint32 blocksize;
 
-//signals:
+
+signals:
+    void addSlave(MasterConnection *socket);
+    void removeSlave(QHostAddress address);
     //void sendPacket(quint16 uid, quint16 port, QVariant packet);
 
 public slots:
