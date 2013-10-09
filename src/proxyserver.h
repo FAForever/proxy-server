@@ -41,7 +41,6 @@ public slots:
 
     void readDataFromMaster();
     void disconnectedFromMaster();
-    void errorFromMaster(QAbstractSocket::SocketError error);
 
 protected:
     void incomingConnection(int socketDescriptor);

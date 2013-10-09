@@ -3,7 +3,7 @@
 
 
 #include <QtNetwork/QTcpServer>
-
+#include "masterconnection.h"
 
 class masterserver : public QTcpServer
 {
@@ -11,9 +11,14 @@ class masterserver : public QTcpServer
 public:
     explicit masterserver(QObject *parent = 0);
 
+signals:
+    void newConnection(MasterConnection *connection);
 
+protected:
+    void incomingConnection(int socketDescriptor);
 
 
 };
+
 
 #endif // MASTERSERVER_H

@@ -4,9 +4,8 @@
 
 Server::Server(QObject* parent): QTcpServer(parent)
 {
-    if (!listen(QHostAddress::Any, 9124))
+    if (!listen(QHostAddress::Any, 0))
         qDebug("Unable to start the server");
-    else
         qDebug() << "Proxy Server Listening to" << this->serverAddress().toString() << "on port" << this->serverPort();
 
     enslaver = false;
@@ -41,19 +40,26 @@ void Server::removePeer(quint16 uid)
 
 bool Server::setSlave(QString masterAddress)
 {
-    qDebug() << "master is :" << masterAddress;
+
     master = QHostAddress(masterAddress);
 
+    if(!master.isNull())
+        qDebug() << "master is :" << masterAddress;
+    masterConnection = new QTcpSocket(this);
     masterConnection->connectToHost(master, 9125);
     while (masterConnection->state() != QAbstractSocket::ConnectedState)
     {
-         QCoreApplication::processEvents();
-        qDebug("connecting to server ...");
+        if (masterConnection->state() != QAbstractSocket::ConnectingState)
+        {
+            qDebug("connecting to master ...");
+            masterConnection->connectToHost(master, 9125);
+        }
+        QCoreApplication::processEvents();
     }
 
     connect(masterConnection, SIGNAL(readyRead()),this,SLOT(readDataFromMaster()));
     connect(masterConnection, SIGNAL(disconnected()),this,SLOT(disconnectedFromMaster()));
-    connect(masterConnection, SIGNAL(error()),this,SLOT(errorFromMaster()));
+
 
     return !master.isNull();
 
@@ -104,12 +110,13 @@ void Server::disconnectedFromMaster()
     masterConnection->connectToHost(master, 9125);
     while (masterConnection->state() != QAbstractSocket::ConnectedState)
     {
+        if (masterConnection->state() != QAbstractSocket::ConnectingState)
+        {
+            qDebug("Re-connecting to master ...");
+            masterConnection->connectToHost(master, 9125);
+        }
          QCoreApplication::processEvents();
-        qDebug("Re-connecting to server ...");
-    }
-}
 
-void Server::errorFromMaster(QAbstractSocket::SocketError error)
-{
-    qDebug() << error;
+    }
+    qDebug("reconnected to master");
 }

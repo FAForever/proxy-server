@@ -9,3 +9,10 @@ masterserver::masterserver(QObject* parent): QTcpServer(parent)
         qDebug() << "Master Server listening to" << this->serverAddress().toString() << "on port" << this->serverPort();
 }
 
+
+void masterserver::incomingConnection( int socketDescriptor )
+{
+    MasterConnection *connection    = new MasterConnection(socketDescriptor, this );
+
+    emit newConnection(connection);
+}
