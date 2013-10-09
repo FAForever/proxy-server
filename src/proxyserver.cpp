@@ -30,12 +30,23 @@ void Server::sendPacket(quint16 uid, quint16 port, QVariant packet)
 void Server::addPeer(quint16 uid, ProxyConnection *socket)
 {
     peers.insert(uid, socket);
+
+    // if we are slave, we should inform the master server of that new peer.
+    if(isSlave())
+    {
+
+    }
 }
 
 void Server::removePeer(quint16 uid)
 {
     peers.remove(uid);
 
+    // if we are slave, we should inform the master server of that new peer.
+    if(isSlave())
+    {
+
+    }
 }
 
 bool Server::setSlave(QString masterAddress)
@@ -86,22 +97,45 @@ void Server::readDataFromMaster()
     {
         if (blocksize == 0)
         {
-
             if (masterConnection->bytesAvailable() < (int)sizeof(quint32))
                 return;
-
-
             ins >> (quint32&) blocksize;
-
         }
         if (masterConnection->bytesAvailable() < blocksize)
             return;
 
-        // read data here
+        QVariant command;
+        ins >> command;
 
+        if(command == "PING")
+        {
+
+            QList<QVariant> data;
+            data << QString("PONG");
+            sendDataToMaster(data);
+        }
 
         blocksize = 0;
     }
+}
+
+void Server::sendDataToMaster(QList<QVariant> packet)
+{
+    QByteArray reply;
+    QDataStream stream(&reply, QIODevice::WriteOnly);
+    stream.setVersion(QDataStream::Qt_4_2);
+
+    stream << (quint32)0;
+
+    for (int i = 0; i < packet.size(); ++i)
+        stream << packet.at(i);
+
+    stream.device()->seek(0);
+    stream <<(quint32)(reply.size() - sizeof(quint32));
+
+    if (masterConnection->write(reply) == -1)
+        masterConnection->abort();
+
 }
 
 void Server::disconnectedFromMaster()

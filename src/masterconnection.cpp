@@ -23,6 +23,19 @@ MasterConnection::MasterConnection(int socketDescriptor, QObject *parent) :
 
     emit addSlave(this);
 
+    pingTimer = new QTimer(this);
+
+    connect(pingTimer, SIGNAL(timeout()), this, SLOT(ping()));
+    pingTimer->start(60000);
+
+}
+
+
+void MasterConnection::ping()
+{
+    QList<QVariant> data;
+    data << QString("PING");
+    send(data);
 }
 
 void MasterConnection::readData()
@@ -45,22 +58,27 @@ void MasterConnection::readData()
             return;
 
         // readData
+        QVariant command;
+        ins >> command;
+
+        if(command == "PONG")
+            qDebug() << "pong!";
 
         blocksize = 0;
     }
 
 }
 
-void MasterConnection::send(quint16 port, QVariant packet)
+void MasterConnection::send(QList<QVariant> packet)
 {
-
     QByteArray reply;
     QDataStream stream(&reply, QIODevice::WriteOnly);
     stream.setVersion(QDataStream::Qt_4_2);
 
     stream << (quint32)0;
-    stream << port;
-    stream << packet;
+
+    for (int i = 0; i < packet.size(); ++i)
+        stream << packet.at(i);
 
     stream.device()->seek(0);
     stream <<(quint32)(reply.size() - sizeof(quint32));
@@ -72,5 +90,7 @@ void MasterConnection::send(quint16 port, QVariant packet)
 void MasterConnection::disconnection()
 {
     emit removeSlave(this->peerAddress());
+    pingTimer->stop();
+    pingTimer->deleteLater();
     deleteLater();
 }

@@ -75,7 +75,6 @@ void ProxyConnection::readData()
 
 void ProxyConnection::send(quint16 port, QVariant packet)
 {
-
     QByteArray reply;
     QDataStream stream(&reply, QIODevice::WriteOnly);
     stream.setVersion(QDataStream::Qt_4_2);

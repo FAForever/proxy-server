@@ -16,11 +16,13 @@ class ProxyConnection;
 class Server : public QTcpServer
 {
     Q_OBJECT
+
 public:
     Server(QObject * parent = 0);
     bool setSlave(QString master);
     bool isSlave();
     bool setMaster();
+    void sendDataToMaster(QList<QVariant>);
 
 private:
     QHash<quint16, ProxyConnection*> peers;
@@ -29,6 +31,7 @@ private:
     bool enslaver;
     QTcpSocket* masterConnection;
     quint32 blocksize;
+
 
 
 signals:

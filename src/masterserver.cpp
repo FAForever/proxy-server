@@ -7,11 +7,7 @@ masterserver::masterserver(QObject* parent): QTcpServer(parent)
         qDebug("Unable to start the master server");
     else
         qDebug() << "Master Server listening to" << this->serverAddress().toString() << "on port" << this->serverPort();
-
-
-
 }
-
 
 void masterserver::incomingConnection( int socketDescriptor )
 {
