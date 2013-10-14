@@ -20,10 +20,16 @@ SOURCES += main.cpp \
     proxyserver.cpp \
     proxyconnection.cpp \
     masterserver.cpp \
-    masterconnection.cpp
+    masterconnection.cpp \
+    peerconnection.cpp \
+    relayserver.cpp \
+    relayconnection.cpp
 
 HEADERS += \
     proxyserver.h \
     proxyconnection.h \
     masterserver.h \
-    masterconnection.h
+    masterconnection.h \
+    peerconnection.h \
+    relayserver.h \
+    relayconnection.h

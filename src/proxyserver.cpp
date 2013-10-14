@@ -1,6 +1,6 @@
 #include "proxyserver.h"
-#include "proxyconnection.h"
 
+#include "proxyconnection.h"
 
 Server::Server(QObject* parent): QTcpServer(parent)
 {
@@ -10,6 +10,12 @@ Server::Server(QObject* parent): QTcpServer(parent)
 
     enslaver = false;
     blocksize = 0;
+
+    relayServer = new relayserver(this);
+
+
+
+
 }
 
 
@@ -25,8 +31,44 @@ void Server::sendPacket(quint16 uid, quint16 port, QVariant packet)
 {
     if(peers.contains(uid))
         peers.value(uid)->send(port, packet);
+    //if it's not a local connection, we are searching to whom we have to send the packet for relaying.
+    else if (peerBook.contains(uid))
+    {
+        QHostAddress peerAddress = peerBook.value(uid);
+
+        if(peerConnections.contains(peerAddress))
+        {
+            peerConnections.value(peerAddress)->send(uid, port, packet);
+
+        }
+        else
+        {
+            // We open a new connection to a fellow relay server
+            PeerConnection* peerConnection = new PeerConnection(this);
+            peerConnections.insert(peerAddress, peerConnection);
+
+            peerConnection->connectToHost(peerAddress, 9126);
+            while (peerConnection->state() != QAbstractSocket::ConnectedState)
+            {
+                if (peerConnection->state() != QAbstractSocket::ConnectingState)
+                {
+                    qDebug("connecting to master ...");
+                    peerConnection->connectToHost(peerAddress, 9126);
+                }
+                QCoreApplication::processEvents();
+            }
+            peerConnection->send(uid, port, packet);
+
+
+        }
+    }
 }
 
+void Server::removePeerConnection(QHostAddress address)
+{
+    peerConnections.remove(address);
+
+}
 
 void Server::addPeerBook(quint16 uid, QHostAddress address)
 {
@@ -37,8 +79,6 @@ void Server::removePeerBook(quint16 uid)
 {
     peerBook.remove(uid);
 }
-
-
 
 void Server::addPeer(quint16 uid, ProxyConnection *socket)
 {
@@ -137,10 +177,10 @@ void Server::readDataFromMaster()
         {
             // We add it to the peer book.
             quint16 uid;
-            QHostAddress address;
+            QString address;
             ins >> uid;
             ins >> address;
-            addPeerBook(uid, address);
+            addPeerBook(uid, QHostAddress(address));
 
         }
         else if (command == "REMOVE_FROM_PEERBOOK")

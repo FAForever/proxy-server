@@ -8,7 +8,6 @@ masterserver::masterserver(QObject* parent): QTcpServer(parent)
     else
         qDebug() << "Master Server listening to" << this->serverAddress().toString() << "on port" << this->serverPort();
 
-
     connect(this, SIGNAL(addPeerBook(quint16,QHostAddress)), this->parent(), SLOT(addPeerBook(quint16,QHostAddress)));
     connect(this, SIGNAL(removePeerBook(quint16)), this->parent(), SLOT(removePeerBook(quint16)));
 }
@@ -29,9 +28,6 @@ void masterserver::removeSlave(QHostAddress address)
 {
     qDebug() << "Removing slave" << address.toString();
     slaves.remove(address);
-
-
-
 }
 
 void masterserver::addPeer(quint16 uid, QHostAddress address)
