@@ -27,3 +27,18 @@ void masterserver::removeSlave(QHostAddress address)
     slaves.remove(address);
 
 }
+
+void masterserver::addPeer(quint16 uid, QHostAddress address)
+{
+    // Another server has a new peer connected, we add it in our book.
+    qDebug() << "Adding peer" << uid << "on server" << address.toString();
+    peerBook.insert(uid, address);
+}
+
+void masterserver::removePeer(quint16 uid)
+{
+    // Another server has a peer disconnection, we remove it from our book.
+    qDebug() << "Removing peer" << uid ;
+    peerBook.remove(uid);
+
+}

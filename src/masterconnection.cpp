@@ -21,6 +21,9 @@ MasterConnection::MasterConnection(int socketDescriptor, QObject *parent) :
     connect(this, SIGNAL(addSlave(MasterConnection*)), this->parent(), SLOT(addSlave(MasterConnection*)));
     connect(this, SIGNAL(removeSlave(QHostAddress)), this->parent(), SLOT(removeSlave(QHostAddress)));
 
+    connect(this, SIGNAL(addPeer(quint16,QHostAddress)), this->parent(), SLOT(addPeer(quint16,QHostAddress)));
+    connect(this, SIGNAL(removePeer(quint16)), this->parent(), SLOT(removePeer(quint16)));
+
     emit addSlave(this);
 
     pingTimer = new QTimer(this);
@@ -36,6 +39,24 @@ void MasterConnection::ping()
     QList<QVariant> data;
     data << QString("PING");
     send(data);
+}
+
+void MasterConnection::processCommand(QString command, QDataStream stream)
+{
+    if(command == "ADD_PEER")
+    {
+        // We should send to all slaves the info...
+        quint16 uid;
+        stream >> uid;
+        emit addPeer(uid, this->peerAddress());
+    }
+    else if (command == "REMOVE_PEER")
+    {
+        // We should send to all slaves the info...
+        quint16 uid;
+        stream >> uid;
+        emit removePeer(uid);
+    }
 }
 
 void MasterConnection::readData()

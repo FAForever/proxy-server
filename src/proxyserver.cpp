@@ -34,7 +34,10 @@ void Server::addPeer(quint16 uid, ProxyConnection *socket)
     // if we are slave, we should inform the master server of that new peer.
     if(isSlave())
     {
-
+        QList<QVariant> data;
+        data << QString("ADD_PEER");
+        data << uid;
+        sendDataToMaster(data);
     }
 }
 
@@ -45,7 +48,10 @@ void Server::removePeer(quint16 uid)
     // if we are slave, we should inform the master server of that new peer.
     if(isSlave())
     {
-
+        QList<QVariant> data;
+        data << QString("REMOVE_PEER");
+        data << uid;
+        sendDataToMaster(data);
     }
 }
 
