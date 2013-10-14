@@ -13,10 +13,6 @@ public:
     explicit MasterConnection(int socketDescriptor, QObject *parent = 0);
     void send(QList<QVariant>);
 
-
-private:
-    void processCommand(QString command, QDataStream stream);
-
 private:
     quint32 blocksize;
     QTimer* pingTimer;
@@ -26,8 +22,7 @@ signals:
     void addSlave(MasterConnection *socket);
     void removeSlave(QHostAddress address);
     void addPeer(quint16 uid, QHostAddress address);
-    void removePeer(quint16 uid);
-    //void sendPacket(quint16 uid, quint16 port, QVariant packet);
+    void removePeer(quint16 uid,QHostAddress address);
 
 public slots:
     void ping();

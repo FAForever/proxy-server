@@ -26,13 +26,13 @@ public:
 
 private:
     QHash<quint16, ProxyConnection*> peers;
+    QHash<quint16, QHostAddress> peerBook;
+
     QHostAddress master;
     masterserver* masterServer;
     bool enslaver;
     QTcpSocket* masterConnection;
     quint32 blocksize;
-
-
 
 signals:
     void newConnection(ProxyConnection *connection);
@@ -41,6 +41,9 @@ public slots:
     void sendPacket(quint16 uid, quint16 port, QVariant packet);
     void addPeer(quint16 uid, ProxyConnection* socket);
     void removePeer(quint16 uid);
+
+    void addPeerBook(quint16 uid, QHostAddress address);
+    void removePeerBook(quint16 uid);
 
     void readDataFromMaster();
     void disconnectedFromMaster();

@@ -22,7 +22,9 @@ MasterConnection::MasterConnection(int socketDescriptor, QObject *parent) :
     connect(this, SIGNAL(removeSlave(QHostAddress)), this->parent(), SLOT(removeSlave(QHostAddress)));
 
     connect(this, SIGNAL(addPeer(quint16,QHostAddress)), this->parent(), SLOT(addPeer(quint16,QHostAddress)));
-    connect(this, SIGNAL(removePeer(quint16)), this->parent(), SLOT(removePeer(quint16)));
+    connect(this, SIGNAL(removePeer(quint16,QHostAddress)), this->parent(), SLOT(removePeer(quint16,QHostAddress)));
+
+
 
     emit addSlave(this);
 
@@ -41,23 +43,6 @@ void MasterConnection::ping()
     send(data);
 }
 
-void MasterConnection::processCommand(QString command, QDataStream stream)
-{
-    if(command == "ADD_PEER")
-    {
-        // We should send to all slaves the info...
-        quint16 uid;
-        stream >> uid;
-        emit addPeer(uid, this->peerAddress());
-    }
-    else if (command == "REMOVE_PEER")
-    {
-        // We should send to all slaves the info...
-        quint16 uid;
-        stream >> uid;
-        emit removePeer(uid);
-    }
-}
 
 void MasterConnection::readData()
 {
@@ -84,6 +69,20 @@ void MasterConnection::readData()
 
         if(command == "PONG")
             qDebug() << "pong!";
+        else if(command == "ADD_PEER")
+        {
+            // We should send to all slaves the info...
+            quint16 uid;
+            ins >> uid;
+            emit addPeer(uid, this->peerAddress());
+        }
+        else if (command == "REMOVE_PEER")
+        {
+            // We should send to all slaves the info...
+            quint16 uid;
+            ins >> uid;
+            emit removePeer(uid, this->peerAddress());
+        }
 
         blocksize = 0;
     }

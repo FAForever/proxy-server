@@ -13,10 +13,12 @@ public:
 
 private:
     QHash<QHostAddress, MasterConnection*> slaves;
-    QHash<quint16, QHostAddress> peerBook;
+
 
 signals:
     void newConnection(MasterConnection *connection);
+    void addPeerBook(quint16 uid, QHostAddress address);
+    void removePeerBook(quint16 uid);
 
 protected:
     void incomingConnection(int socketDescriptor);
@@ -26,7 +28,8 @@ public slots:
     void addSlave(MasterConnection* socket);
     void removeSlave(QHostAddress address);
     void addPeer(quint16 uid, QHostAddress address);
-    void removePeer(quint16 uid);
+    void removePeer(quint16 uid, QHostAddress address);
+
 };
 
 

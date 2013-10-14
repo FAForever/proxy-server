@@ -27,6 +27,19 @@ void Server::sendPacket(quint16 uid, quint16 port, QVariant packet)
         peers.value(uid)->send(port, packet);
 }
 
+
+void Server::addPeerBook(quint16 uid, QHostAddress address)
+{
+    peerBook.insert(uid, address);
+}
+
+void Server::removePeerBook(quint16 uid)
+{
+    peerBook.remove(uid);
+}
+
+
+
 void Server::addPeer(quint16 uid, ProxyConnection *socket)
 {
     peers.insert(uid, socket);
@@ -120,6 +133,24 @@ void Server::readDataFromMaster()
             data << QString("PONG");
             sendDataToMaster(data);
         }
+        else if(command == "ADD_TO_PEERBOOK")
+        {
+            // We add it to the peer book.
+            quint16 uid;
+            QHostAddress address;
+            ins >> uid;
+            ins >> address;
+            addPeerBook(uid, address);
+
+        }
+        else if (command == "REMOVE_FROM_PEERBOOK")
+        {
+            // We remove it from the book.
+            quint16 uid;
+            ins >> uid;
+            removePeerBook(uid);
+        }
+
 
         blocksize = 0;
     }
