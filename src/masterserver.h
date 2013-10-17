@@ -27,8 +27,8 @@ public slots:
 
     void addSlave(MasterConnection* socket);
     void removeSlave(QHostAddress address);
-    void addPeer(quint16 uid, QHostAddress address);
-    void removePeer(quint16 uid, QHostAddress address);
+    void addPeer(quint16 uid, QHostAddress address, bool local);
+    void removePeer(quint16 uid, QHostAddress address, bool local);
 
 };
 

@@ -30,7 +30,7 @@ void masterserver::removeSlave(QHostAddress address)
     slaves.remove(address);
 }
 
-void masterserver::addPeer(quint16 uid, QHostAddress address)
+void masterserver::addPeer(quint16 uid, QHostAddress address, bool local = false)
 {
     // Another server has a new peer connected, we make every slave aware of it.
 
@@ -44,18 +44,21 @@ void masterserver::addPeer(quint16 uid, QHostAddress address)
 
     foreach (MasterConnection* conn, slaves)
     {
-        // we dont want to send it to the peer.
-        if(conn->peerAddress() != address)
+        if (conn->peerAddress() != address)
+        {
+            qDebug() << "Sending add peer to" << conn->peerAddress() << "on port" << conn->peerPort();
             conn->send(data);
+        }
     }
     // And of course to our own proxy
-    emit addPeerBook(uid, address);
+    if(!local)
+        emit addPeerBook(uid, address);
 }
 
-void masterserver::removePeer(quint16 uid, QHostAddress address)
+void masterserver::removePeer(quint16 uid, QHostAddress address, bool local = false)
 {
     // Another server has a peer disconnection, we make every slave aware of it.
-    qDebug() << "Removing peer" << uid ;
+    qDebug() << "Removing peer" << uid << "for slaves";
 
     //form the packet
     QList<QVariant> data;
@@ -64,10 +67,14 @@ void masterserver::removePeer(quint16 uid, QHostAddress address)
 
     foreach (MasterConnection* conn, slaves)
     {
-        // we dont want to send it to the peer.
-        if(conn->peerAddress() != address)
+        if (conn->peerAddress() != address)
+        {
+            qDebug() << "Sending remove peer to" << conn->peerAddress() << "on port" << conn->peerPort();
             conn->send(data);
+        }
+
     }
     // And of course to our own proxy
-    emit removePeerBook(uid);
+    if(!local)
+        emit removePeerBook(uid);
 }

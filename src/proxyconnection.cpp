@@ -24,7 +24,6 @@ ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
     connect(this, SIGNAL(addPeer(quint16,ProxyConnection*)), this->parent(), SLOT(addPeer(quint16,ProxyConnection*)));
     connect(this, SIGNAL(removePeer(quint16)), this->parent(), SLOT(removePeer(quint16)));
 
-    //emit addPeer(address, this);
     uidSet = false;
 
 }

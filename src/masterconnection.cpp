@@ -21,8 +21,8 @@ MasterConnection::MasterConnection(int socketDescriptor, QObject *parent) :
     connect(this, SIGNAL(addSlave(MasterConnection*)), this->parent(), SLOT(addSlave(MasterConnection*)));
     connect(this, SIGNAL(removeSlave(QHostAddress)), this->parent(), SLOT(removeSlave(QHostAddress)));
 
-    connect(this, SIGNAL(addPeer(quint16,QHostAddress)), this->parent(), SLOT(addPeer(quint16,QHostAddress)));
-    connect(this, SIGNAL(removePeer(quint16,QHostAddress)), this->parent(), SLOT(removePeer(quint16,QHostAddress)));
+    connect(this, SIGNAL(addPeer(quint16,QHostAddress,bool)), this->parent(), SLOT(addPeer(quint16,QHostAddress,bool)));
+    connect(this, SIGNAL(removePeer(quint16,QHostAddress,bool)), this->parent(), SLOT(removePeer(quint16,QHostAddress,bool)));
 
 
 
@@ -72,16 +72,16 @@ void MasterConnection::readData()
         else if(command == "ADD_PEER")
         {
             // We should send to all slaves the info...
-            quint16 uid;
+            QVariant uid;
             ins >> uid;
-            emit addPeer(uid, this->peerAddress());
+            emit addPeer(uid.toInt(), this->peerAddress(), false);
         }
         else if (command == "REMOVE_PEER")
         {
             // We should send to all slaves the info...
-            quint16 uid;
+            QVariant uid;
             ins >> uid;
-            emit removePeer(uid, this->peerAddress());
+            emit removePeer(uid.toInt(), this->peerAddress(), false);
         }
 
         blocksize = 0;

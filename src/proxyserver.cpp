@@ -12,10 +12,6 @@ Server::Server(QObject* parent): QTcpServer(parent)
     blocksize = 0;
 
     relayServer = new relayserver(this);
-
-
-
-
 }
 
 
@@ -72,16 +68,25 @@ void Server::removePeerConnection(QHostAddress address)
 
 void Server::addPeerBook(quint16 uid, QHostAddress address)
 {
+    qDebug() << "Adding peer in book:" << uid << "located on" << address.toString() ;
     peerBook.insert(uid, address);
 }
 
 void Server::removePeerBook(quint16 uid)
 {
+    qDebug() << "Removing peer in book:" << uid;
     peerBook.remove(uid);
 }
 
 void Server::addPeer(quint16 uid, ProxyConnection *socket)
 {
+
+
+    //Closing all previous connections
+    if(peers.contains(uid))
+        peers.value(uid)->abort();
+
+    qDebug() << "Adding peer:" << uid;
     peers.insert(uid, socket);
 
     // if we are slave, we should inform the master server of that new peer.
@@ -92,10 +97,17 @@ void Server::addPeer(quint16 uid, ProxyConnection *socket)
         data << uid;
         sendDataToMaster(data);
     }
+    else
+    {
+        // If we are not a slave we are a master (duh) and should still make all others slave aware of that peer.
+        masterServer->addPeer(uid, socket->peerAddress(), true);
+
+    }
 }
 
 void Server::removePeer(quint16 uid)
 {
+    qDebug() << "Removing peer :" << uid;
     peers.remove(uid);
 
     // if we are slave, we should inform the master server of that new peer.
@@ -105,6 +117,11 @@ void Server::removePeer(quint16 uid)
         data << QString("REMOVE_PEER");
         data << uid;
         sendDataToMaster(data);
+    }
+    else
+    {
+        // If we are not a slave we are a master (duh) and should still make all others slave aware of that peer.
+        masterServer->removePeer(uid, this->serverAddress(), true);
     }
 }
 
@@ -149,6 +166,7 @@ bool Server::setMaster()
 
 void Server::readDataFromMaster()
 {
+    qDebug() << "Reading from master server";
     QDataStream ins(masterConnection);
     ins.setVersion(QDataStream::Qt_4_2);
 
@@ -165,7 +183,7 @@ void Server::readDataFromMaster()
 
         QVariant command;
         ins >> command;
-
+        qDebug() << "command:" << command;
         if(command == "PING")
         {
 
@@ -176,19 +194,19 @@ void Server::readDataFromMaster()
         else if(command == "ADD_TO_PEERBOOK")
         {
             // We add it to the peer book.
-            quint16 uid;
-            QString address;
+            QVariant uid;
+            QVariant address;
             ins >> uid;
             ins >> address;
-            addPeerBook(uid, QHostAddress(address));
+            addPeerBook(uid.toInt(), QHostAddress(address.toString()));
 
         }
         else if (command == "REMOVE_FROM_PEERBOOK")
         {
             // We remove it from the book.
-            quint16 uid;
+            QVariant uid;
             ins >> uid;
-            removePeerBook(uid);
+            removePeerBook(uid.toInt());
         }
 
 
