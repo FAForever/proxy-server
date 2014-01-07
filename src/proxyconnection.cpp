@@ -60,11 +60,29 @@ void ProxyConnection::readData()
         }
         else
         {
-            quint16 uid;
-            ins >> uid;
-            uidUser = uid;
-            emit addPeer(uid, this);
-            uidSet = true;
+            //QString command;
+            //if(command == "SET_UID")
+            //{
+                quint16 uid;
+                ins >> uid;
+                uidUser = uid;
+                emit addPeer(uid, this);
+                uidSet = true;
+            //}
+            //else if (command == "REQUEST_SERVER")
+            {/*
+                if(this->parent()->isSlave())
+                {
+                    //return the master server
+
+                }
+                else
+                {
+                   // return the list of slaves.
+
+                }
+*/
+            }
 
         }
         blocksize = 0;

@@ -4,7 +4,7 @@
 
 Server::Server(QObject* parent): QTcpServer(parent)
 {
-    if (!listen(QHostAddress::Any, 0))
+    if (!listen(QHostAddress::Any, 9124))
         qDebug("Unable to start the server");
         qDebug() << "Proxy Server Listening to" << this->serverAddress().toString() << "on port" << this->serverPort();
 
