@@ -102,7 +102,6 @@ void ProxyConnection::send(quint16 port, QVariant packet)
 
     stream.device()->seek(0);
     stream <<(quint32)(reply.size() - sizeof(quint32));
-    qDebug() << "sending data packet";
     if (this->write(reply) == -1)
         this->abort();
 }
