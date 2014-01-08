@@ -24,7 +24,6 @@ ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
     connect(this, SIGNAL(addPeer(quint16,ProxyConnection*)), this->parent(), SLOT(addPeer(quint16,ProxyConnection*)));
     connect(this, SIGNAL(removePeer(quint16)), this->parent(), SLOT(removePeer(quint16)));
 
-    //emit addPeer(address, this);
     uidSet = false;
 
 }
@@ -61,11 +60,29 @@ void ProxyConnection::readData()
         }
         else
         {
-            quint16 uid;
-            ins >> uid;
-            uidUser = uid;
-            emit addPeer(uid, this);
-            uidSet = true;
+            //QString command;
+            //if(command == "SET_UID")
+            //{
+                quint16 uid;
+                ins >> uid;
+                uidUser = uid;
+                emit addPeer(uid, this);
+                uidSet = true;
+            //}
+            //else if (command == "REQUEST_SERVER")
+            {/*
+                if(this->parent()->isSlave())
+                {
+                    //return the master server
+
+                }
+                else
+                {
+                   // return the list of slaves.
+
+                }
+*/
+            }
 
         }
         blocksize = 0;
@@ -75,7 +92,6 @@ void ProxyConnection::readData()
 
 void ProxyConnection::send(quint16 port, QVariant packet)
 {
-
     QByteArray reply;
     QDataStream stream(&reply, QIODevice::WriteOnly);
     stream.setVersion(QDataStream::Qt_4_2);
