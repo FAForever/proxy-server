@@ -58,6 +58,10 @@ void Server::sendPacket(quint16 uid, quint16 port, QVariant packet)
 
         }
     }
+    else
+    {
+        qDebug() << "No peer found" << uid;
+    }
 }
 
 void Server::removePeerConnection(QHostAddress address)
