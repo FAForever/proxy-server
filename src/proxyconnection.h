@@ -19,6 +19,7 @@ private:
     quint32 blocksize;
     quint16 uidUser;
     bool uidSet;
+    bool testing;
 
 signals:
     void sendPacket(quint16 uid, quint16 port, QVariant packet);

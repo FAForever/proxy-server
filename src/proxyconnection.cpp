@@ -6,6 +6,7 @@ ProxyConnection::ProxyConnection(int socketDescriptor, QObject *parent) :
 {
 
     blocksize = 0;
+    testing = false;
 
     if (this->setSocketDescriptor(socketDescriptor))
         qDebug("socket set");
@@ -49,6 +50,7 @@ void ProxyConnection::readData()
 
         if (uidSet)
         {
+            
             quint16 port;
             quint16 uid;
             QVariant packet;
@@ -56,7 +58,10 @@ void ProxyConnection::readData()
             ins >> port;
             ins >> uid;
             ins >> packet;
-            emit sendPacket(uid, port, packet);
+            if (testing)
+                send(port, packet)
+            else
+                emit sendPacket(uid, port, packet);
         }
         else
         {
@@ -66,7 +71,11 @@ void ProxyConnection::readData()
                 quint16 uid;
                 ins >> uid;
                 uidUser = uid;
-                emit addPeer(uid, this);
+                if (uidUser == 1) 
+                    testing = true;
+                else
+                    emit addPeer(uid, this);
+
                 uidSet = true;
             //}
             //else if (command == "REQUEST_SERVER")
