@@ -59,7 +59,7 @@ void ProxyConnection::readData()
             ins >> uid;
             ins >> packet;
             if (testing)
-                send(port, packet)
+                send(port, packet);
             else
                 emit sendPacket(uid, port, packet);
         }
