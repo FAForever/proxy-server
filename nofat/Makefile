@@ -1,5 +1,5 @@
 CXX=g++
-CXXFLAGS=-O3 -mx32 -g
+CXXFLAGS=-O3 -mx32
 
 all: proxyserver testclient
 

@@ -1,14 +1,14 @@
-#include <iostream>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#include <time.h>
 
+#include <netdb.h>
+#include <sys/types.h>
+#include <sys/socket.h>
 #include <sys/epoll.h>
 #include <sys/signal.h>
 #include <arpa/inet.h>
@@ -65,15 +65,24 @@ fd_ctx * proxy_peers::find(int uid) {
 
 void proxy_peers::add(fd_ctx * p) {
 	if (npeers < MAX_PEERS) {
-		peers[npeers] = p;
+		// insert fresh entries at the front
+		fd_ctx * prev = peers[0];
+		for (int i = 1; i < npeers; ++i) {
+			fd_ctx * tmp = peers[i];
+			peers[i] = prev;
+			prev = tmp;
+		}
+		peers[npeers] = prev;
+		peers[0] = p;
 		++p->refcount;
 		++npeers;
 	} else {
 		// remove oldest mapping
-		if (--peers[0]->refcount == 0) {
-			delete peers[0];
+		if (--peers[npeers - 1]->refcount == 0) {
+			delete peers[npeers - 1];
 		}
-		peers[0] = p;
+		--npeers;
+		add(p);
 	}
 }
 
@@ -186,7 +195,7 @@ int main(int argc, char ** argv) {
 
 	{
 		int opt;
-		while ((opt = getopt(argc, argv, "p:")) != EOF) {
+		while ((opt = getopt(argc, argv, "p:h")) != EOF) {
 			switch (opt) {
 			case 'p' :
 				listen_port = atoi(optarg);
@@ -254,7 +263,17 @@ int main(int argc, char ** argv) {
 			c.fd = s;
 			c.is_server = true;
 			c.protocol = ai->ai_protocol;
-			get_ip_str(ai->ai_addr, c.buf, sizeof(c.buf));
+			char * strp = c.buf;
+			int slen  = sizeof(c.buf);
+			if (ai->ai_family == AF_INET6) {
+				*strp++ = '[';
+				slen -= 2;
+			}
+			get_ip_str(ai->ai_addr, strp, slen);
+			if (ai->ai_family == AF_INET6) {
+				strcat(c.buf, "]");
+			}
+			sprintf(c.buf + strlen(c.buf), ":%d", listen_port);
 			server_sockets.push_back(c);
 		}
 		freeaddrinfo(ai_res);
