@@ -5,16 +5,23 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <string.h>
 #include <stdio.h>
 #include <assert.h>
 
 #include <sys/epoll.h>
 #include <sys/signal.h>
+#include <arpa/inet.h>
 
 #include <set>
 #include <vector>
 
+#define likely(x) __builtin_expect((x),1)
+#define unlikely(x) __builtin_expect((x),0)
+
 struct fd_ctx;
+
+int total_connections = 0;
 
 #define MAX_PEERS 16
 struct proxy_peers {
@@ -25,18 +32,19 @@ struct proxy_peers {
 	void remove(fd_ctx * p);
 	void cleanup_dangling();
 	void remove_from_all_peers(fd_ctx * p);
+	void unref_all();
 	proxy_peers() : npeers(0) { }
 };
 
 struct fd_ctx {
 	int faf_uid;
 	int fd;
-	bool is_server;
-	int protocol;
-	proxy_peers peers;
-	char buf[3072];
 	int buf_len;
 	int refcount;
+	int protocol;
+	bool is_server;
+	proxy_peers peers;
+	char buf[3072];
 
 	void remove_myself_from_peer_caches() {
 		peers.remove_from_all_peers(this);
@@ -44,7 +52,7 @@ struct fd_ctx {
 	void cache_remove(fd_ctx * p) {
 		peers.remove(p);
 	}
-	fd_ctx() : refcount(1) { }
+	fd_ctx() : refcount(1) { ++total_connections; }
 	~fd_ctx();
 };
 
@@ -61,7 +69,11 @@ void proxy_peers::add(fd_ctx * p) {
 		++p->refcount;
 		++npeers;
 	} else {
-		fprintf(stderr, "cannot add new peer to group\n");
+		// remove oldest mapping
+		if (--peers[0]->refcount == 0) {
+			delete peers[0];
+		}
+		peers[0] = p;
 	}
 }
 
@@ -85,6 +97,15 @@ void proxy_peers::remove_from_all_peers(fd_ctx * p) {
 	for (int i = 0; i < npeers; ++i) {
 		peers[i]->cache_remove(p);
 	}
+}
+
+void proxy_peers::unref_all() {
+	for (int i = 0; i < npeers; ++i) {
+		if (--peers[i]->refcount == 0) {
+			delete peers[i];
+		}
+	}
+	npeers = 0;
 }
 
 void proxy_peers::cleanup_dangling() {
@@ -134,6 +155,29 @@ void sigusr1(int) {
 }
 
 fd_ctx::~fd_ctx() {
+	peers.unref_all();
+	--total_connections;
+}
+
+
+char * get_ip_str(const struct sockaddr *sa, char *s, size_t maxlen) {
+    switch(sa->sa_family) {
+	case AF_INET:
+		inet_ntop(AF_INET, &(((struct sockaddr_in *)sa)->sin_addr),
+				  s, maxlen);
+		break;
+		
+	case AF_INET6:
+		inet_ntop(AF_INET6, &(((struct sockaddr_in6 *)sa)->sin6_addr),
+				  s, maxlen);
+		break;
+		
+	default:
+		strncpy(s, "(unknown)", maxlen);
+		return NULL;
+    }
+	
+    return s;
 }
 
 int main(int argc, char ** argv) {
@@ -210,6 +254,7 @@ int main(int argc, char ** argv) {
 			c.fd = s;
 			c.is_server = true;
 			c.protocol = ai->ai_protocol;
+			get_ip_str(ai->ai_addr, c.buf, sizeof(c.buf));
 			server_sockets.push_back(c);
 		}
 		freeaddrinfo(ai_res);
@@ -236,14 +281,16 @@ int main(int argc, char ** argv) {
 
 	fd_ctx fd_ctx_finder;
 	signal(SIGUSR1, sigusr1);
+	signal(SIGPIPE, SIG_IGN);
 
-	int total_sockets = server_sockets.size();
+	int total_sockets  = server_sockets.size();
+	time_t status_time = time(NULL);
 
 	while (total_sockets) {
-		if (got_sigusr1) {
+		if (unlikely(got_sigusr1)) {
 			// close listening sockets
 			for (int i = 0; i < server_sockets.size(); ++i) {
-				fprintf(stderr, "close server %d\n", i);
+				fprintf(stderr, "close server %s\n", server_sockets[i].buf);
 				if (epoll_ctl(epoll, EPOLL_CTL_DEL, server_sockets[i].fd, NULL) < 0) {
 					perror("epoll_ctl");
 				}
@@ -252,16 +299,20 @@ int main(int argc, char ** argv) {
 			}
 			got_sigusr1 = false;
 		}
+		if (unlikely(status_time + 5 < time(NULL))) {
+			fprintf(stderr, "%d connections, %d identified peers\n", total_connections, peer_sockets.size());
+			status_time = time(NULL);
+		}
 
-		int ep_num = epoll_wait(epoll, epoll_events, epoll_max_events, -1);
-		if (ep_num < 0) {
+		int ep_num = epoll_wait(epoll, epoll_events, epoll_max_events, 1000);
+		if (unlikely(ep_num < 0)) {
 			if (errno == EINTR) continue;
 			perror("epoll_wait"); continue;
 		}
 		for (int epi = 0; epi < ep_num; ++epi) {
 			epoll_event * ev = epoll_events + epi;
 			fd_ctx * ctxp = (fd_ctx *) ev->data.ptr;
-			if (ctxp->is_server && ctxp->protocol == IPPROTO_TCP) {
+			if (unlikely(ctxp->is_server && ctxp->protocol == IPPROTO_TCP)) {
 				sockaddr_storage saddr;
 				socklen_t saddrlen = sizeof(saddr);
 				int nsock = accept(ctxp->fd, (sockaddr *) &saddr, &saddrlen);
@@ -287,20 +338,12 @@ int main(int argc, char ** argv) {
 				}
 			} else {
 				int n = read(ctxp->fd, ctxp->buf + ctxp->buf_len, PEER_CTX_BUF_SIZE - ctxp->buf_len);
-				if (n < 0) {
+				if (unlikely(n < 0)) {
 					if (errno != ECONNRESET && errno != EAGAIN && errno != EINTR) {
 						perror("read");
 					}
 					continue;
-					if (epoll_ctl(epoll, EPOLL_CTL_DEL, ctxp->fd, NULL) < 0) {
-						perror("epoll_ctl");
-					}
-					close(ctxp->fd);
-					if (ctxp->faf_uid != -1) {
-						peer_sockets.erase(ctxp);
-					}
-					delete ctxp;
-				} else if (n == 0) {
+				} else if (unlikely(n == 0)) {
 					if (epoll_ctl(epoll, EPOLL_CTL_DEL, ctxp->fd, NULL) < 0) {
 						perror("epoll_ctl");
 					}
@@ -319,63 +362,94 @@ int main(int argc, char ** argv) {
 				} else {
 					ctxp->buf_len += n;
 					char * buf_head = ctxp->buf;
+					bool postprocess = true;
 					
 					while (buf_head < ctxp->buf + ctxp->buf_len) {
 						proxy_msg_header * h = (proxy_msg_header *) buf_head;
-						int buf_len = ctxp->buf + ctxp->buf_len - buf_head;
+						const int buf_len = ctxp->buf + ctxp->buf_len - buf_head;
+						const int in_msg_size = ntohl(h->size);
 
-						if (buf_len < 4 || ntohl(h->size) + 4 > buf_len) {
+						if (buf_len < 4) {
 							break;
 						}
-						if (ctxp->faf_uid == -1) {
+						
+						if (unlikely(buf_len > PEER_CTX_BUF_SIZE)) {
+							// message to big
+							if (epoll_ctl(epoll, EPOLL_CTL_DEL, ctxp->fd, NULL) < 0) {
+								perror("epoll_ctl");
+							}
+							close(ctxp->fd);
+							--total_sockets;
+							if (ctxp->faf_uid != -1) {
+								peer_sockets.erase(ctxp);
+							}
+							ctxp->remove_myself_from_peer_caches();
+							--ctxp->refcount;
+							if (ctxp->refcount == 0) {
+								delete ctxp;
+							} else {
+								ctxp->faf_uid = -1;
+							}
+							postprocess = false;
+							break;
+						}
+
+						if (in_msg_size + 4 > buf_len) {
+							break;
+						}
+
+						if (unlikely(ctxp->faf_uid == -1)) {
 							proxy_msg_header_set_uid * hu = (proxy_msg_header_set_uid *) h;
 							ctxp->faf_uid = ntohs(hu->uid);
 							peer_sockets.insert(ctxp);
 
-							buf_head += ntohl(hu->size) + 4;
+							buf_head += in_msg_size + 4;
 							continue;
 						}
 						int uid = ntohs(h->destuid);
 
 						fd_ctx * peer = ctxp->peers.find(uid);
 
-						if (! peer) {
+						if (unlikely(! peer)) {
 							fd_ctx_finder.faf_uid = uid;
 							peer_sockets_t::iterator iter = peer_sockets.find(&fd_ctx_finder);
 							if (iter != peer_sockets.end()) {
 								peer = *iter;
 								ctxp->peers.add(peer);
 							} else {
-								buf_head += ntohl(h->size) + 4;
+								buf_head += in_msg_size + 4;
 								continue;
 							}
 						}
 
-						int in_msg_size = ntohl(h->size);
 						int in_port = ntohs(h->port);
 						proxy_msg_header_to_peer * hout = (proxy_msg_header_to_peer *) (buf_head + OUT_HEADER_OFFSET_ADJ);
 						hout->port = htons(in_port);
-						int out_size;
-						hout->size = htonl((out_size = in_msg_size - sizeof(uint16_t)));
+						const int out_size = in_msg_size - OUT_HEADER_OFFSET_ADJ;
+						hout->size = htonl(out_size);
 
 						{
-							int n = write(peer->fd, buf_head + OUT_HEADER_OFFSET_ADJ, out_size + 4);
-							if (n < 0) {
-								perror("write");
-							} else if (n != out_size + 4) {
+							int n = write(peer->fd, (char *) hout, out_size + 4);
+							if (unlikely(n < 0)) {
+								if (errno != ECONNRESET) {
+									perror("write");
+								}
+							} else if (unlikely(n != out_size + 4)) {
 								fprintf(stderr, "short write (%d of %d\n", n, out_size + 4);
 							}
 						}
 						buf_head += in_msg_size + 4;
 					}
-					int new_buflen = ctxp->buf + ctxp->buf_len - buf_head;
-					assert(new_buflen >= 0);
-					if (new_buflen) {
-						for (char * p = ctxp->buf; buf_head < ctxp->buf + ctxp->buf_len; ++p, ++buf_head) {
-							*p = *buf_head;
+					if (likely(postprocess)) {
+						int new_buflen = ctxp->buf + ctxp->buf_len - buf_head;
+
+						if (unlikely(new_buflen && ctxp->buf != buf_head)) {
+							for (char * p = ctxp->buf; buf_head < ctxp->buf + ctxp->buf_len; ++p, ++buf_head) {
+								*p = *buf_head;
+							}
 						}
+						ctxp->buf_len = new_buflen;
 					}
-					ctxp->buf_len = new_buflen;
 				}
 			}
 		}

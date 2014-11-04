@@ -58,30 +58,56 @@ int main(int argc, char ** argv) {
 				sleep(1);
 				for (int i = 0; i < atoi(argv[3]); ++i) {
 					int msgsize = rand() & (63 & ~3);
+					if (msgsize < 4) msgsize = 4;
 					uint32_t * p = (uint32_t *) (buf + sizeof(*h) + 9);
-					for (int j = 0; j < msgsize / 4; ++j) {
+					p[0] = i;
+					for (int j = 1; j < msgsize / 4; ++j) {
 						p[j] = peer_uid + j;
 					}
 					memcpy(buf + sizeof(*h), "\0\0\0\x0a\0\0\0", 7);
 					uint16_t * ppp = (uint16_t *) (buf + sizeof(*h) + 7);
 					*ppp = htons(msgsize);
 					h->destuid = htons(peer_uid);
-					h->port = htons(i + 10 > atoi(argv[3]) ? 1 : 0);
+					h->port = htons(i + 1 ==  atoi(argv[3]) ? 1 : 0);
 					h->size = htonl(msgsize + sizeof(*h) + 9 - 4);
 					//					fprintf(stderr, "%d %d write %d %d %d\n", getpid(), uid, peer_uid, ntohs(h->port), msgsize);
-					write(sock, buf, sizeof(*h) + msgsize + 9);
-					usleep(10000);
+					if (write(sock, buf, sizeof(*h) + msgsize + 9) <= 0) {
+						perror("write");
+					}
+					usleep(1000);
 				}
 				exit(0);
 			} else {
 				int nread = 0;
+				char * ack = new char[atoi(argv[3])];
+				memset(ack, 0, atoi(argv[3]));
+
 				while (true) {
-					read(sock, buf, sizeof(buf));
+					int n = read(sock, buf, 4);
+					uint32_t * pp = (uint32_t *) buf;
+					n = read(sock, buf + 4, ntohl(*pp));
+
 					nread++;
+					uint32_t * p = (uint32_t *) (buf + sizeof(*h_to) + 9);
+					int msgsize = ntohl(h_to->size) - 2 - 9;
+
+					ack[p[0]] = 1;
+					for (int j = 1; j < msgsize / 4; ++j) {
+						if (p[j] != uid + j) {
+							fprintf(stderr, "data error\n");
+						}
+					}
 					//					fprintf(stderr, "%d %d read %d\n", getpid(), uid, ntohs(h_to->port));
 					if (ntohs(h_to->port)) break;
 				}
-				fprintf(stderr, "quit %d\n", nread);
+				for (int j = 0; j < atoi(argv[3]); ++j) {
+					if (!ack[j]) {
+						fprintf(stderr, "%d ", j);
+					}
+				}
+				if (nread != atoi(argv[3])) {
+					fprintf(stderr, "quit %d\n", nread);
+				}
 				wait(NULL);
 			}
 			exit(0);
