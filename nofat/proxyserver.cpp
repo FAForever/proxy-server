@@ -48,6 +48,14 @@ int total_connections = 0;
 int total_sockets = 0;
 
 
+int vperror(const char * msg, const char * srcfile = NULL, int srcline = -1) {
+	if (srcfile) {
+		fprintf(stderr, "%s:%d: %s: %s\n", srcfile, srcline, msg, strerror(errno));
+	} else {
+		fprintf(stderr, "%s: %s\n", msg, strerror(errno));
+	}
+}
+
 #define MAX_PEERS 16
 struct proxy_peers {
 	int npeers;
@@ -226,11 +234,11 @@ int ctrl_socket_listen(int s, const char * path) {
 	}
 	int on = 1;
 	if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) == -1) {
-		perror("setsockopt(REUSEADDR)");
+		vperror("setsockopt(REUSEADDR)");
 		return -1;
 	}
 	if (listen(s, 1) < 0) {
-		perror("listen"); return -1;
+		vperror("listen"); return -1;
 	}
 	return 0;
 }
@@ -240,7 +248,7 @@ int poll_in(int epoll, fd_ctx * ptr) {
 	ev.events   = EPOLLIN;
 	ev.data.ptr = (void *) ptr;
 	if (epoll_ctl(epoll, EPOLL_CTL_ADD, ptr->fd, &ev) < 0) {
-		perror("epoll_ctl"); return -1;
+		vperror("epoll_ctl"); return -1;
 	}
 	return 0;
 }
@@ -282,7 +290,7 @@ int send_fds(int ctrlsock, Iter beg, Iter end, Container * all) {
 				* ((int *) CMSG_DATA(cmp) + fd_count) = (**beg).fd;
 				to_close.push_back((**beg).fd);
 				//if (epoll_ctl(epoll, EPOLL_CTL_DEL, (**beg).fd, NULL) < 0) {
-				//					perror("epoll_ctl(DEL)");
+				//					vperror("epoll_ctl(DEL)");
 				//				}
 				++fd_count;
 			} else {
@@ -306,9 +314,11 @@ int send_fds(int ctrlsock, Iter beg, Iter end, Container * all) {
 
 	if (fd_count) {
 		if (sendmsg(ctrlsock, &msg, 0) < 0) {
-			perror("sendmsg");
+			vperror("sendmsg");
 		} else {
 			total_sockets -= to_close.size();
+			// we dont care about caches and refcounts and destroying contexts,
+			// so we cheat and handle the global counters here
 			total_connections -= to_close.size();
 			for (int i = 0; i < to_close.size(); ++i) {
 				close(to_close[i]);
@@ -372,13 +382,13 @@ int main(int argc, char ** argv) {
 
 	int epoll = epoll_create(1024);
 	if (epoll < 0) {
-		perror("epoll_create"); exit(1);
+		vperror("epoll_create"); exit(1);
 	}
 
 	if (ctrl_socket_path) {
 		int s = socket(PF_UNIX, SOCK_SEQPACKET, 0);
 		if (s < 0) {
-			perror("socket(AF_UNIX)");
+			vperror("socket(AF_UNIX)");
 			exit(1);
 		}
 		struct sockaddr_un sun;
@@ -402,13 +412,16 @@ int main(int argc, char ** argv) {
 			}
 		} else {
 			char buf[16];
-			strcpy(buf, "unlisten");
-			ssize_t n = send(s, "unlisten", strlen("unlisten"), 0);
+			ssize_t n = send(s, "unlisten", sizeof("unlisten") - 1, 0);
 			if (n < 0) {
-				perror("sendmsg");
+				vperror("sendmsg");
+				exit(1);
+			} else if (n == 0) {
+				fprintf(stderr, "unexpected EOF\n");
 				exit(1);
 			}
 
+			// blocking read
 			n = recv(s, buf, sizeof(buf), 0);
 			if (strncmp(buf, "unlistening", strlen("unlistening")) != 0) {
 				fprintf(stderr, "running server reported: ");
@@ -436,28 +449,28 @@ int main(int argc, char ** argv) {
 		for (struct addrinfo * ai = ai_res; ai; ai = ai->ai_next) {
 			int s = socket(ai->ai_family, ai->ai_socktype, ai->ai_protocol);
 			if (s < 0) {
-				perror("socket"); exit(1);
+				vperror("socket"); exit(1);
 			}
 			if (ai->ai_family == AF_INET6) {
 				int on = 1;
 				if (setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY, 
 							   (char *)&on, sizeof(on)) == -1) {
-					perror("setsockopt(IPV6_ONLY)");
+					vperror("setsockopt(IPV6_ONLY)");
 					exit(1);
 				}
 			}
 			{
 				int on = 1;
 				if (setsockopt(s, SOL_SOCKET, SO_REUSEADDR, (char *) &on, sizeof(on)) == -1) {
-					perror("setsockopt(REUSEADDR)");
+					vperror("setsockopt(REUSEADDR)");
 					exit(1);
 				}
 			}
 			if (bind(s, ai->ai_addr, ai->ai_addrlen) < 0) {
-				perror("bind"); exit(1);
+				vperror("bind"); exit(1);
 			}
 			if (listen(s, 5) < 0) {
-				perror("listen"); exit(1);
+				vperror("listen"); exit(1);
 			}
 			fd_ctx c;
 			c.fd = s;
@@ -499,7 +512,7 @@ int main(int argc, char ** argv) {
 			for (int i = 0; i < server_sockets.size(); ++i) {
 				fprintf(stderr, "close server %s\n", server_sockets[i].buf);
 				if (epoll_ctl(epoll, EPOLL_CTL_DEL, server_sockets[i].fd, NULL) < 0) {
-					perror("epoll_ctl");
+					vperror("epoll_ctl");
 				}
 				close(server_sockets[i].fd);
 				--total_sockets;
@@ -514,7 +527,7 @@ int main(int argc, char ** argv) {
 		int ep_num = epoll_wait(epoll, epoll_events, epoll_max_events, 1000);
 		if (unlikely(ep_num < 0)) {
 			if (errno == EINTR) continue;
-			perror("epoll_wait"); continue;
+			vperror("epoll_wait"); continue;
 		}
 		bool epoll_restart = false;
 		for (int epi = 0; epi < ep_num && ! epoll_restart; ++epi) {
@@ -526,45 +539,58 @@ int main(int argc, char ** argv) {
 				
 				int nsock = accept(ctxp->fd, (sockaddr *) &ss, &sl);
 				if (nsock < 0) {
-					perror("accept"); exit(1);
+					vperror("accept"); continue;
 				}
-				ctrl_socket_conn.fd = nsock;
 				epoll_event ev;
 				ev.events   = EPOLLIN;
 				ev.data.ptr = (void *) &ctrl_socket_conn;
-				if (epoll_ctl(epoll, EPOLL_CTL_ADD, ctrl_socket_conn.fd, &ev) < 0) {
-					perror("epoll_ctl"); exit(1);
+				if (epoll_ctl(epoll, EPOLL_CTL_ADD, nsock, &ev) < 0) {
+					vperror("epoll_ctl");
+					close(nsock);
+					continue;
 				}
+
+				// we only ever accept one ctrl client
 				if (epoll_ctl(epoll, EPOLL_CTL_DEL, ctrl_socket.fd, NULL) < 0) {
-					perror("epoll_ctl"); exit(1);
+					vperror("epoll_ctl");
+					close(nsock);
+					continue;
 				}
+				ctrl_socket_conn.fd = nsock;
 			} else if (unlikely(ctxp == &ctrl_socket_conn)) {
 				if (ctrl_socket_mode_listen) {
 					char buf[1024];
 
 					int n = read(ctxp->fd, buf, sizeof(buf));
 					if (n < 0) {
-						perror("read");
+						if (errno == EINTR || errno == EAGAIN) continue;
+						vperror("read");
+						close(ctxp->fd);
+						poll_in(epoll, &ctrl_socket);
+					} else if (n == 0) {
+						close(ctxp->fd);
+						poll_in(epoll, &ctrl_socket);
 					} else {
-						if (strncmp(buf, "unlisten", strlen("unlisten")) == 0) {
+						if (strncmp(buf, "unlisten", sizeof("unlisten") - 1) == 0) {
 							for (int i = 0; i < server_sockets.size(); ++i) {
 								fprintf(stderr, "close server %s\n", server_sockets[i].buf);
 								if (epoll_ctl(epoll, EPOLL_CTL_DEL, server_sockets[i].fd, NULL) < 0) {
-									perror("epoll_ctl");
+									vperror("epoll_ctl");
 								}
 								close(server_sockets[i].fd);
 								--total_sockets;
 							}
-							if (write(ctrl_socket_conn.fd, "unlistening", strlen("unlistening")) < 0) {
-								perror("write");
+							if (write(ctrl_socket_conn.fd, "unlistening", sizeof("unlistening") - 1) < 0) {
+								vperror("write", __FILE__, __LINE__);
+							} else {
+								int nsent = 0;
+								do {
+									nsent = send_fds(ctrl_socket_conn.fd, peer_sockets.begin(), peer_sockets.end(), &peer_sockets);
+									fprintf(stderr, "bulk send: %d\n", nsent);
+								} while (nsent && ! peer_sockets.empty());
+								epoll_restart = true;
+								decay_mode = true;
 							}
-							int nsent = 0;
-							do {
-								nsent = send_fds(ctrl_socket_conn.fd, peer_sockets.begin(), peer_sockets.end(), &peer_sockets);
-								fprintf(stderr, "send at once: %d\n", nsent);
-							} while (nsent && ! peer_sockets.empty());
-							epoll_restart = true;
-							decay_mode = true;
 						}
 					}
 				} else {
@@ -590,12 +616,12 @@ int main(int argc, char ** argv) {
 
 					int n = recvmsg(ctxp->fd, &msg, 0);
 					if (n < 0) {
-						perror("recvmsg");
+						vperror("recvmsg");
 					} else if (n == 0) {
 						fprintf(stderr, "unexpected close\n");
 						close(ctxp->fd);
 					} else {
-						if (strncmp((const char *) iov.iov_base, "desc", std::min(4, (int) iov.iov_len)) == 0) {
+						if (strncmp((const char *) iov.iov_base, "desc", std::min(4, n)) == 0) {
 							cmsghdr * cmp = CMSG_FIRSTHDR(&msg);
 							if (cmp->cmsg_level != SOL_SOCKET || cmp->cmsg_type != SCM_RIGHTS) {
 								fprintf(stderr, "malformed control message: wrong type\n");
@@ -620,7 +646,7 @@ int main(int argc, char ** argv) {
 								ev.events = EPOLLIN;
 								ev.data.ptr = (void *) cp;
 								if (epoll_ctl(epoll, EPOLL_CTL_ADD, fd, &ev) < 0) {
-									perror("epoll_ctl");
+									vperror("epoll_ctl");
 									--total_sockets;
 									close(fd);
 									delete cp;
@@ -629,11 +655,11 @@ int main(int argc, char ** argv) {
 									peer_sockets.insert(cp);
 								}
 							}
-						} else if (strncmp((const char *) iov.iov_base, "exit", 4) == 0) {
+						} else if (strncmp((const char *) iov.iov_base, "exit", std::min(4, n)) == 0) {
 							close(ctxp->fd);
 							int s = socket(PF_UNIX, SOCK_SEQPACKET, 0);
 							if (s < 0) {
-								perror("socket(PF_UNIX)");
+								vperror("socket(PF_UNIX)");
 							} else {
 								ctrl_socket_listen(s, ctrl_socket_path);
 								ctrl_socket.fd = s;
@@ -649,7 +675,7 @@ int main(int argc, char ** argv) {
 				socklen_t saddrlen = sizeof(saddr);
 				int nsock = accept(ctxp->fd, (sockaddr *) &saddr, &saddrlen);
 				if (nsock < 0) {
-					perror("accept");
+					vperror("accept");
 				} else {
 					++total_sockets;
 					fd_ctx * cp = new fd_ctx;
@@ -662,21 +688,25 @@ int main(int argc, char ** argv) {
 					ev.events = EPOLLIN;
 					ev.data.ptr = (void *) cp;
 					if (epoll_ctl(epoll, EPOLL_CTL_ADD, nsock, &ev) < 0) {
-						perror("epoll_ctl");
+						vperror("epoll_ctl");
 						--total_sockets;
 						close(nsock);
 						delete cp;
 					}
 				}
 			} else {
-				if (unlikely(decay_mode) && ctxp->buf_len == 0) {
+				if (unlikely(decay_mode && ctxp->buf_len == 0)) {
 					send_fd(ctrl_socket_conn.fd, ctxp);
+					if (ctxp->faf_uid != -1) {
+						peer_sockets.erase(ctxp);
+					}
+					continue; // -> next epoll result
 				}
 
 				int n = read(ctxp->fd, ctxp->buf + ctxp->buf_len, PEER_CTX_BUF_SIZE - ctxp->buf_len);
 				if (unlikely(n < 0)) {
 					if (errno != ECONNRESET && errno != EAGAIN && errno != EINTR) {
-						perror("read");
+						vperror("read");
 					}
 					continue;
 				} else if (unlikely(n == 0)) {
@@ -709,7 +739,7 @@ int main(int argc, char ** argv) {
 						if (unlikely(buf_len > PEER_CTX_BUF_SIZE)) {
 							// message to big
 							if (epoll_ctl(epoll, EPOLL_CTL_DEL, ctxp->fd, NULL) < 0) {
-								perror("epoll_ctl");
+								vperror("epoll_ctl");
 							}
 							close(ctxp->fd);
 							--total_sockets;
@@ -737,38 +767,46 @@ int main(int argc, char ** argv) {
 							peer_sockets.insert(ctxp);
 
 							buf_head += in_msg_size + 4;
-							continue;
-						}
-						int uid = ntohs(h->destuid);
-
-						fd_ctx * peer = ctxp->peers.find(uid);
-
-						if (unlikely(! peer)) {
-							fd_ctx_finder.faf_uid = uid;
-							peer_sockets_t::iterator iter = peer_sockets.find(&fd_ctx_finder);
-							if (iter != peer_sockets.end()) {
-								peer = *iter;
-								ctxp->peers.add(peer);
-							} else {
-								buf_head += in_msg_size + 4;
-								continue;
-							}
+							continue; // -> next message from this fd_ctx
 						}
 
-						int in_port = ntohs(h->port);
-						proxy_msg_header_to_peer * hout = (proxy_msg_header_to_peer *) (buf_head + OUT_HEADER_OFFSET_ADJ);
-						hout->port = htons(in_port);
-						const int out_size = in_msg_size - OUT_HEADER_OFFSET_ADJ;
-						hout->size = htonl(out_size);
+						// in decay mode we always drop, because we expect our
+						// caches and refcounts to be inconsistent
+						// we can decay without bookkeeping if we never send any packets
+						// out (== we never expect a context to exists unless epoll still
+						// knows about it)
+						if (! decay_mode) {
+							int uid = ntohs(h->destuid);
 
-						{
-							int n = write(peer->fd, (char *) hout, out_size + 4);
-							if (unlikely(n < 0)) {
-								if (errno != ECONNRESET) {
-									perror("write");
+							fd_ctx * peer = ctxp->peers.find(uid);
+
+							if (unlikely(! peer)) {
+								fd_ctx_finder.faf_uid = uid;
+								peer_sockets_t::iterator iter = peer_sockets.find(&fd_ctx_finder);
+								if (iter != peer_sockets.end()) {
+									peer = *iter;
+									ctxp->peers.add(peer);
+								} else {
+									buf_head += in_msg_size + 4;
+									continue;
 								}
-							} else if (unlikely(n != out_size + 4)) {
-								fprintf(stderr, "short write (%d of %d\n", n, out_size + 4);
+							}
+							
+							int in_port = ntohs(h->port);
+							proxy_msg_header_to_peer * hout = (proxy_msg_header_to_peer *) (buf_head + OUT_HEADER_OFFSET_ADJ);
+							hout->port = htons(in_port);
+							const int out_size = in_msg_size - OUT_HEADER_OFFSET_ADJ;
+							hout->size = htonl(out_size);
+							
+							{
+								int n = write(peer->fd, (char *) hout, out_size + 4);
+								if (unlikely(n < 0)) {
+									if (errno != ECONNRESET && errno != EPIPE) {
+										vperror("write", __FILE__, __LINE__);
+									}
+								} else if (unlikely(n != out_size + 4)) {
+									fprintf(stderr, "short write (%d of %d\n", n, out_size + 4);
+								}
 							}
 						}
 						buf_head += in_msg_size + 4;
@@ -783,6 +821,14 @@ int main(int argc, char ** argv) {
 						}
 						ctxp->buf_len = new_buflen;
 					}
+					// we want to get rid of clients as soon as possible and
+					// dont wait for them to send the next message to trigger it
+					if (unlikely(decay_mode && ctxp->buf_len == 0)) {
+						send_fd(ctrl_socket_conn.fd, ctxp);
+						if (ctxp->faf_uid != -1) {
+							peer_sockets.erase(ctxp);
+						}
+					}
 				}
 			}
 		}
@@ -791,7 +837,7 @@ int main(int argc, char ** argv) {
 		close(ctrl_socket.fd);
 		unlink(ctrl_socket_path);
 		if (write(ctrl_socket_conn.fd, "exit", strlen("exit")) < 0) {
-			perror("send");
+			vperror("send");
 		}
 	}
 	fprintf(stderr, "exit due to %d sockets left to serve\n", total_sockets);
