@@ -68,7 +68,7 @@ int main(int argc, char ** argv) {
 					uint16_t * ppp = (uint16_t *) (buf + sizeof(*h) + 7);
 					*ppp = htons(msgsize);
 					h->destuid = htons(peer_uid);
-					h->port = htons(i + 1 ==  atoi(argv[3]) ? 1 : 0);
+					h->port = htons(i + 10 ==  atoi(argv[3]) ? 1 : 0);
 					h->size = htonl(msgsize + sizeof(*h) + 9 - 4);
 					//					fprintf(stderr, "%d %d write %d %d %d\n", getpid(), uid, peer_uid, ntohs(h->port), msgsize);
 					if (write(sock, buf, sizeof(*h) + msgsize + 9) <= 0) {
@@ -100,18 +100,21 @@ int main(int argc, char ** argv) {
 					//					fprintf(stderr, "%d %d read %d\n", getpid(), uid, ntohs(h_to->port));
 					if (ntohs(h_to->port)) break;
 				}
-				for (int j = 0; j < atoi(argv[3]); ++j) {
+				int missing = 0;
+				for (int j = 0; j < atoi(argv[3]) - 10; ++j) {
 					if (!ack[j]) {
 						fprintf(stderr, "%d ", j);
+						++missing;
 					}
 				}
-				if (nread != atoi(argv[3])) {
-					fprintf(stderr, "quit %d\n", nread);
+				if (missing) {
+					fprintf(stderr, "quit %d missing %d received\n", missing, nread);
 				}
 				wait(NULL);
 			}
 			exit(0);
 		}
+		usleep(500000);
 		++uid;
 	}
 
