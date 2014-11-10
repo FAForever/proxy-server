@@ -87,6 +87,14 @@ int main(int argc, char ** argv) {
 					uint32_t * pp = (uint32_t *) buf;
 					n = read(sock, buf + 4, ntohl(*pp));
 
+					if (n < 0) {
+						perror("read");
+					}
+					if (n == 0) {
+						close(sock);
+						break;
+					}
+
 					nread++;
 					uint32_t * p = (uint32_t *) (buf + sizeof(*h_to) + 9);
 					int msgsize = ntohl(h_to->size) - 2 - 9;
@@ -114,7 +122,7 @@ int main(int argc, char ** argv) {
 			}
 			exit(0);
 		}
-		usleep(500000);
+		usleep(100000);
 		++uid;
 	}
 
