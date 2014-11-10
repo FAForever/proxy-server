@@ -22,7 +22,7 @@
 
 #define MAX_DESC_PER_MESSAGE 256
 #define MAX_CONTROL_MESSAGE_SIZE (4 + MAX_DESC_PER_MESSAGE * sizeof(int))
-#define MAX_CONTROL_MESSAGE_CONTROL_SIZE (MAX_DESC_PER_MESSAGE * CMSG_SPACE(sizeof(int)))
+#define MAX_CONTROL_MESSAGE_CONTROL_SIZE (CMSG_SPACE(MAX_DESC_PER_MESSAGE * sizeof(int)))
 
 template <int size, bool C>
 struct optional_buf {
