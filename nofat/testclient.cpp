@@ -122,7 +122,7 @@ int main(int argc, char ** argv) {
 			}
 			exit(0);
 		}
-		usleep(100000);
+		usleep(300000);
 		++uid;
 	}
 

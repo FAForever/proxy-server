@@ -190,7 +190,6 @@ struct proxy_msg_header_to_peer {
 
 typedef std::set<fd_ctx *, fd_ctx_less_by_uid> peer_sockets_t;
 
-#define PEER_CTX_BUF_SIZE 3072
 #define OUT_HEADER_OFFSET_ADJ (sizeof(proxy_msg_header) - sizeof(proxy_msg_header_to_peer))
 
 bool got_sigusr1 = false;
@@ -713,7 +712,7 @@ int main(int argc, char ** argv) {
 					continue; // -> next epoll result
 				}
 
-				int n = read(ctxp->fd, ctxp->buf + ctxp->buf_len, PEER_CTX_BUF_SIZE - ctxp->buf_len);
+				int n = read(ctxp->fd, ctxp->buf + ctxp->buf_len, FDCTX_BUFFER_SIZE - ctxp->buf_len);
 				if (unlikely(n < 0)) {
 					if (errno != ECONNRESET && errno != EAGAIN && errno != EINTR) {
 						VPERROR("read");
@@ -738,15 +737,14 @@ int main(int argc, char ** argv) {
 					bool postprocess = true;
 
 					while (buf_head < ctxp->buf + ctxp->buf_len) {
-						proxy_msg_header * h = (proxy_msg_header *) buf_head;
 						const int buf_len = ctxp->buf + ctxp->buf_len - buf_head;
-						const int in_msg_size = ntohl(h->size);
-
 						if (buf_len < 4) {
 							break;
 						}
-						
-						if (unlikely(buf_len > PEER_CTX_BUF_SIZE)) {
+						proxy_msg_header * h = (proxy_msg_header *) buf_head;
+						const int in_msg_size = ntohl(h->size);
+
+						if (unlikely(in_msg_size > FDCTX_BUFFER_SIZE)) {
 							// message to big
 							if (epoll_ctl(epoll, EPOLL_CTL_DEL, ctxp->fd, NULL) < 0) {
 								VPERROR("epoll_ctl");
