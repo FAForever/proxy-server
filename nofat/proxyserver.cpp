@@ -37,14 +37,11 @@ struct optional_buf<size, false> {
 
 #define MAX_CONTROL_MESSAGE_TOTAL_SIZE (MAX_CONTROL_MESSAGE_SIZE + MAX_CONTROL_MESSAGE_CONTROL_SIZE)
 
-#define FDCTX_BUFFER_SIZE 3072
-
 #define likely(x) __builtin_expect((x),1)
 #define unlikely(x) __builtin_expect((x),0)
 
 struct fd_ctx;
 
-int total_connections = 0;
 int total_sockets = 0;
 
 #define VPERROR(msg) vperror(msg, __FILE__, __LINE__)
@@ -73,12 +70,12 @@ struct proxy_peers {
 struct fd_ctx {
 	int faf_uid;
 	int fd;
+	bool is_server;
+	proxy_peers peers;
 	int buf_len;
 	int refcount;
 	int protocol;
-	bool is_server;
-	proxy_peers peers;
-	char buf[FDCTX_BUFFER_SIZE];
+	char buf[1];
 
 	void remove_myself_from_peer_caches() {
 		peers.remove_from_all_peers(this);
@@ -86,9 +83,23 @@ struct fd_ctx {
 	void cache_remove(fd_ctx * p) {
 		peers.remove(p);
 	}
-	fd_ctx() : refcount(1) { ++total_connections; }
+	fd_ctx() : refcount(1) { }
 	~fd_ctx();
 };
+
+static const int FDCTX_CLIENT_BUFSIZE     = 4096 - sizeof(fd_ctx);
+static const int FDCTX_TCP_SERVER_BUFSIZE = 256  - sizeof(fd_ctx);
+static const int FDCTX_CTRL_BUFSIZE       = 0;
+
+fd_ctx * allocate_fdctx(int bufsize) {
+	void * memp = malloc(sizeof(fd_ctx) + bufsize);
+	return new (memp) fd_ctx();
+}
+
+void deallocate_fdctx(fd_ctx * p) {
+	p->~fd_ctx();
+	free(p);
+}
 
 fd_ctx * proxy_peers::find(int uid) {
 	for (int i = 0; i < npeers; ++i) {
@@ -113,7 +124,7 @@ void proxy_peers::add(fd_ctx * p) {
 	} else {
 		// remove oldest mapping
 		if (--peers[npeers - 1]->refcount == 0) {
-			delete peers[npeers - 1];
+			deallocate_fdctx(peers[npeers - 1]);
 		}
 		--npeers;
 		add(p);
@@ -129,7 +140,7 @@ void proxy_peers::remove(fd_ctx * p) {
 			}
 			--npeers;
 			if (--p->refcount == 0) {
-				delete p;
+				deallocate_fdctx(p);
 			}
 			return;
 		}
@@ -145,7 +156,7 @@ void proxy_peers::remove_from_all_peers(fd_ctx * p) {
 void proxy_peers::unref_all() {
 	for (int i = 0; i < npeers; ++i) {
 		if (--peers[i]->refcount == 0) {
-			delete peers[i];
+			deallocate_fdctx(peers[i]);
 		}
 	}
 	npeers = 0;
@@ -156,7 +167,7 @@ void proxy_peers::cleanup_dangling() {
 	for (int i = 0; i < npeers; ++i) {
 		if (peers[i]->faf_uid == -1) {
 			if (--peers[i]->refcount == 0) {
-				delete peers[i];
+				deallocate_fdctx(peers[i]);
 				continue;
 			}
 		}
@@ -200,7 +211,6 @@ void sigusr1(int) {
 
 fd_ctx::~fd_ctx() {
 	peers.unref_all();
-	--total_connections;
 }
 
 char * get_ip_str(const struct sockaddr *sa, char *s, size_t maxlen) {
@@ -319,7 +329,6 @@ int send_fds(int ctrlsock, int epoll, Iter beg, Iter end, Container * all) {
 			total_sockets -= to_close.size();
 			// we dont care about caches and refcounts and destroying contexts,
 			// so we cheat and handle the global counters here
-			total_connections -= to_close.size();
 			for (int i = 0; i < to_close.size(); ++i) {
 				if (epoll_ctl(epoll, EPOLL_CTL_DEL, to_close[i], NULL) < 0) {
 					VPERROR("epoll_ctl");
@@ -371,7 +380,7 @@ int main(int argc, char ** argv) {
 	}
 	sprintf(listen_port_str, "%d", listen_port);
 
-	typedef std::vector<fd_ctx> server_sockets_t;
+	typedef std::vector<fd_ctx *> server_sockets_t;
 	server_sockets_t server_sockets;
 	peer_sockets_t peer_sockets;
 
@@ -476,28 +485,28 @@ int main(int argc, char ** argv) {
 			if (listen(s, 50) < 0) {
 				VPERROR("listen"); exit(1);
 			}
-			fd_ctx c;
-			c.fd = s;
-			c.is_server = true;
-			c.protocol = ai->ai_protocol;
-			char * strp = c.buf;
-			int slen  = sizeof(c.buf);
+			fd_ctx * c = allocate_fdctx(FDCTX_TCP_SERVER_BUFSIZE);
+			c->fd = s;
+			c->is_server = true;
+			c->protocol  = ai->ai_protocol;
+			char * strp  = c->buf;
+			int slen     = FDCTX_TCP_SERVER_BUFSIZE;
 			if (ai->ai_family == AF_INET6) {
 				*strp++ = '[';
 				slen -= 2;
 			}
 			get_ip_str(ai->ai_addr, strp, slen);
 			if (ai->ai_family == AF_INET6) {
-				strcat(c.buf, "]");
+				strcat(c->buf, "]");
 			}
-			sprintf(c.buf + strlen(c.buf), ":%d", listen_port);
+			sprintf(c->buf + strlen(c->buf), ":%d", listen_port);
 			server_sockets.push_back(c);
 		}
 		freeaddrinfo(ai_res);
 	}
 
 	for (int i = 0; i < server_sockets.size(); ++i) {
-		poll_in(epoll, &server_sockets[i]);
+		poll_in(epoll, server_sockets[i]);
 	}
 
 	epoll_event epoll_events[32];
@@ -514,17 +523,17 @@ int main(int argc, char ** argv) {
 		if (unlikely(got_sigusr1)) {
 			// close listening sockets
 			for (int i = 0; i < server_sockets.size(); ++i) {
-				fprintf(stderr, "close server %s\n", server_sockets[i].buf);
-				if (epoll_ctl(epoll, EPOLL_CTL_DEL, server_sockets[i].fd, NULL) < 0) {
+				fprintf(stderr, "close server %s\n", server_sockets[i]->buf);
+				if (epoll_ctl(epoll, EPOLL_CTL_DEL, server_sockets[i]->fd, NULL) < 0) {
 					VPERROR("epoll_ctl");
 				}
-				close(server_sockets[i].fd);
+				close(server_sockets[i]->fd);
 				--total_sockets;
 			}
 			got_sigusr1 = false;
 		}
 		if (unlikely(status_time + 5 < time(NULL))) {
-			fprintf(stderr, "%d connections, %d identified peers\n", total_connections - server_sockets.size(), peer_sockets.size());
+			fprintf(stderr, "%d connections, %d identified peers\n", total_sockets - server_sockets.size(), peer_sockets.size());
 			status_time = time(NULL);
 		}
 
@@ -554,7 +563,7 @@ int main(int argc, char ** argv) {
 					continue;
 				}
 
-				// we only ever accept one ctrl client
+				// we only ever accept one ctrl client at a time
 				if (epoll_ctl(epoll, EPOLL_CTL_DEL, ctrl_socket.fd, NULL) < 0) {
 					VPERROR("epoll_ctl");
 					close(nsock);
@@ -563,7 +572,7 @@ int main(int argc, char ** argv) {
 				ctrl_socket_conn.fd = nsock;
 			} else if (unlikely(ctxp == &ctrl_socket_conn)) {
 				if (ctrl_socket_mode_listen) {
-					char buf[1024];
+					char buf[32];
 
 					int n = read(ctxp->fd, buf, sizeof(buf));
 					if (n < 0) {
@@ -577,11 +586,11 @@ int main(int argc, char ** argv) {
 					} else {
 						if (strncmp(buf, "unlisten", sizeof("unlisten") - 1) == 0) {
 							for (int i = 0; i < server_sockets.size(); ++i) {
-								fprintf(stderr, "close server %s\n", server_sockets[i].buf);
-								if (epoll_ctl(epoll, EPOLL_CTL_DEL, server_sockets[i].fd, NULL) < 0) {
+								fprintf(stderr, "close server %s\n", server_sockets[i]->buf);
+								if (epoll_ctl(epoll, EPOLL_CTL_DEL, server_sockets[i]->fd, NULL) < 0) {
 									VPERROR("epoll_ctl");
 								}
-								close(server_sockets[i].fd);
+								close(server_sockets[i]->fd);
 								--total_sockets;
 							}
 							if (write(ctrl_socket_conn.fd, "unlistening", sizeof("unlistening") - 1) < 0) {
@@ -603,12 +612,16 @@ int main(int argc, char ** argv) {
 				} else {
 					msghdr msg;
 					iovec iov;
-					optional_buf<MAX_CONTROL_MESSAGE_CONTROL_SIZE, (MAX_CONTROL_MESSAGE_TOTAL_SIZE > FDCTX_BUFFER_SIZE)> control;
-					char * controlp = control.placeholder ?
-						ctxp->buf + MAX_CONTROL_MESSAGE_SIZE :
-						control.value;
-					optional_buf<MAX_CONTROL_MESSAGE_SIZE, (MAX_CONTROL_MESSAGE_SIZE > FDCTX_BUFFER_SIZE)> buf;
-					char * bufp = buf.placeholder ?	ctxp->buf : control.value;
+					char control[MAX_CONTROL_MESSAGE_CONTROL_SIZE];
+					char * controlp = control;
+					//					optional_buf<MAX_CONTROL_MESSAGE_CONTROL_SIZE, (MAX_CONTROL_MESSAGE_TOTAL_SIZE > FDCTX_BUFFER_SIZE)> control;
+					//					char * controlp = control.placeholder ?
+					//						ctxp->buf + MAX_CONTROL_MESSAGE_SIZE :
+					//						control.value;
+					//					optional_buf<MAX_CONTROL_MESSAGE_SIZE, (MAX_CONTROL_MESSAGE_SIZE > FDCTX_BUFFER_SIZE)> buf;
+					//					char * bufp = buf.placeholder ?	ctxp->buf : control.value;
+					char buf[MAX_CONTROL_MESSAGE_SIZE];
+					char * bufp = buf;
 
 					iov.iov_base = bufp;
 					iov.iov_len  = MAX_CONTROL_MESSAGE_SIZE;
@@ -643,7 +656,7 @@ int main(int argc, char ** argv) {
 								int fd = * ((int *) CMSG_DATA(cmp) + fd_count);
 								++sockets_inherited;
 								++total_sockets;
-								fd_ctx * cp = new fd_ctx;
+								fd_ctx * cp = allocate_fdctx(FDCTX_CLIENT_BUFSIZE);
 								cp->fd = fd;
 								cp->faf_uid = *uidp;
 								cp->is_server = false;
@@ -656,7 +669,7 @@ int main(int argc, char ** argv) {
 									VPERROR("epoll_ctl");
 									--total_sockets;
 									close(cp->fd);
-									delete cp;
+									deallocate_fdctx(cp);
 								}
 								if (cp->faf_uid != -1) {
 									peer_sockets.insert(cp);
@@ -685,7 +698,7 @@ int main(int argc, char ** argv) {
 					VPERROR("accept");
 				} else {
 					++total_sockets;
-					fd_ctx * cp = new fd_ctx;
+					fd_ctx * cp = allocate_fdctx(FDCTX_CLIENT_BUFSIZE);
 					cp->fd = nsock;
 					cp->faf_uid = -1;
 					cp->is_server = false;
@@ -699,7 +712,7 @@ int main(int argc, char ** argv) {
 						VPERROR("epoll_ctl");
 						--total_sockets;
 						close(nsock);
-						delete cp;
+						deallocate_fdctx(cp);
 					}
 				}
 			} else {
@@ -712,7 +725,7 @@ int main(int argc, char ** argv) {
 					continue; // -> next epoll result
 				}
 
-				int n = read(ctxp->fd, ctxp->buf + ctxp->buf_len, FDCTX_BUFFER_SIZE - ctxp->buf_len);
+				int n = read(ctxp->fd, ctxp->buf + ctxp->buf_len, FDCTX_CLIENT_BUFSIZE - ctxp->buf_len);
 				if (unlikely(n < 0)) {
 					if (errno != ECONNRESET && errno != EAGAIN && errno != EINTR) {
 						VPERROR("read");
@@ -727,7 +740,7 @@ int main(int argc, char ** argv) {
 					ctxp->remove_myself_from_peer_caches();
 					--ctxp->refcount;
 					if (ctxp->refcount == 0) {
-						delete ctxp;
+						deallocate_fdctx(ctxp);
 					} else {
 						ctxp->faf_uid = -1;
 					}
@@ -744,7 +757,7 @@ int main(int argc, char ** argv) {
 						proxy_msg_header * h = (proxy_msg_header *) buf_head;
 						const int in_msg_size = ntohl(h->size);
 
-						if (unlikely(in_msg_size > FDCTX_BUFFER_SIZE)) {
+						if (unlikely(in_msg_size > FDCTX_CLIENT_BUFSIZE)) {
 							// message to big
 							if (epoll_ctl(epoll, EPOLL_CTL_DEL, ctxp->fd, NULL) < 0) {
 								VPERROR("epoll_ctl");
@@ -757,7 +770,7 @@ int main(int argc, char ** argv) {
 							ctxp->remove_myself_from_peer_caches();
 							--ctxp->refcount;
 							if (ctxp->refcount == 0) {
-								delete ctxp;
+								deallocate_fdctx(ctxp);
 							} else {
 								ctxp->faf_uid = -1;
 							}
